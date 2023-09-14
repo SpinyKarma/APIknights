@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from pprint import pprint
 import re
+import json
 ''' Pseudo code for scraper func
 
     Args:
@@ -78,6 +79,38 @@ def parse_trust(trust_soup):
     return output
 
 
+def parse_stat_obj(script):
+    op_stat_str = re.findall('var myStats = ({.+})\s+var summon_stats',
+                             script.text.replace("\n", ""))[0]
+    op_stat_object = json.loads(op_stat_str)
+
+    del op_stat_object["ne"]["arts"]
+    op_stat_object["ne"]["block"] = op_stat_object["ne"]["Base"]["block"]
+    del op_stat_object["ne"]["Base"]["block"]
+    del op_stat_object["ne"]["Max"]["block"]
+
+    op_stat_object["e0"] = op_stat_object["ne"]
+    del op_stat_object["ne"]
+
+    if op_stat_object["e1"]["cost"] == "":
+        del op_stat_object["e1"]
+    else:
+        del op_stat_object["e1"]["arts"]
+        op_stat_object["e1"]["block"] = op_stat_object["e1"]["Base"]["block"]
+        del op_stat_object["e1"]["Base"]["block"]
+        del op_stat_object["e1"]["Max"]["block"]
+
+    if op_stat_object["e2"]["cost"] == "":
+        del op_stat_object["e2"]
+    else:
+        del op_stat_object["e2"]["arts"]
+        op_stat_object["e2"]["block"] = op_stat_object["e2"]["Base"]["block"]
+        del op_stat_object["e2"]["Base"]["block"]
+        del op_stat_object["e2"]["Max"]["block"]
+
+    return op_stat_object
+
+
 def mdy2ymd(date):
     mdy = date.split("/")
     ymd = [mdy[2], mdy[0], mdy[1]]
@@ -99,9 +132,22 @@ def scrape(name):
     operator_info["operator_name"] = soup.find(
         "div", {"id": "page-title"}).find("h1").text
 
+    # Gampress URL Name
+    operator_info["gamepress_url_name"] = name
+
+    # Gamepress URL
+    operator_info["gamepress_link"] = url
+
     # Operator Rarity
     operator_info["rarity"] = len(
         soup.find("div", class_="rarity-cell").findAll("img"))
+
+    # Operator Description
+    op_desc = soup.findAll("div", class_="description-box")
+    operator_info["description"] = op_desc[1].text.strip()
+
+    # Operator Quote
+    operator_info["quote"] = op_desc[2].text.strip()
 
     # Alter Name
     alter = soup.find("a", class_="alter-form")
@@ -110,12 +156,25 @@ def scrape(name):
     else:
         operator_info["alter"] = None
 
-    # Operator Description
-    op_desc = soup.findAll("div", class_="description-box")
-    operator_info["description"] = op_desc[1].text.strip()
+    # Operator Secondary Stats
+    op_2nd_stats = soup.findAll("div", class_="other-stat-value-cell")
+    for stat in op_2nd_stats:
+        name = stat.find(class_="effect-title").text.strip()
+        stat_2nd_lookup = {
+            "Arts Resist": "resist",
+            "Redeploy Time": "redeploy",
+            "DP Cost": "cost",
+            "Block": "block",
+            "Attack Interval": "interval"
+        }
+        operator_info[stat_2nd_lookup[name]] = stat.find(
+            class_="effect-description").text.strip()
 
-    # Operator Quote
-    operator_info["quote"] = op_desc[2].text.strip()
+    # Operator Level Stats
+    op_stat_script_article = soup.find("article", class_="operator-node")
+    op_stat_script = op_stat_script_article.findAll("script")[-1]
+    op_stat_object = parse_stat_obj(op_stat_script)
+    operator_info["level_stats"] = op_stat_object
 
     # Operator Potentials
     op_pots = soup.find("div", class_="potential-cell")
@@ -125,23 +184,13 @@ def scrape(name):
     op_trust = soup.find("div", class_="trust-cell")
     operator_info["trust_stats"] = parse_trust(op_trust)
 
-    # Operator Secondary Stats
-    op_2_stats = soup.findAll("div", class_="other-stat-value-cell")
-    for stat in op_2_stats:
-        name = stat.find(class_="effect-title").text.strip()
-        stat_2_lookup = {
-            "Arts Resist": "resist",
-            "Redeploy Time": "redeploy",
-            "DP Cost": "cost",
-            "Block": "block",
-            "Attack Interval": "interval"
-        }
-        operator_info[stat_2_lookup[name]] = stat.find(
-            class_="effect-description").text.strip()
+    # Limited
+    op_obtain_info = soup.find(class_="obtain-approach-table").text.strip()
+    limited = re.search("LIMITED", op_obtain_info)
+
+    operator_info["limited"] = True if limited else False
 
     # EN Release Info
-    op_obtain_info = soup.find(class_="obtain-approach-table").text.strip()
-
     en_release = re.search(
         "Release Date \(Global\)\n(\d+/\d+/\d\d\d\d)",
         op_obtain_info
@@ -175,17 +224,18 @@ def scrape(name):
     # operator_info["CN_recruitment_added"] = mdy2ymd(
     #     cn_recruit.group(1)) if cn_recruit else None
 
-    # Limited?
-    limited = re.search("LIMITED", op_obtain_info)
-
-    operator_info["limited"] = True if limited else False
+    # Archetype Class Name
+    op_class = soup.findAll("div", class_="profession-title")
+    archetype_info["class_name"] = op_class[0].text.strip()
 
     # Archetype Name
-    op_class = soup.findAll("div", class_="profession-title")
     archetype_info["archetype_name"] = op_class[1].text.strip()
 
-    # Archetype Class Name
-    archetype_info["class_name"] = op_class[0].text.strip()
+    # Archetype Trait
+    trait_info = op_desc[0]
+    for s in trait_info.select("pre"):
+        s.extract()
+    archetype_info["trait"] = trait_info.text.strip()
 
     # Archetype Position
     op_position = soup.find_all("div", class_="information-cell")
@@ -206,14 +256,28 @@ def scrape(name):
                                        ).find("div", class_="range-box")
     archetype_info["ranges"] = parse_range(class_ranges)
 
-    # Archetype Trait
-    trait_info = op_desc[0]
-    for s in trait_info.select("pre"):
-        s.extract()
-    archetype_info["trait"] = trait_info.text.strip()
+    # Archetype Cost Gains On Promotion
+    e1_cost_gain = None
+    e2_cost_gain = None
+    if op_stat_object.get("e1", None):
+        e1_cost_gain = op_stat_object["e1"]["cost"] > op_stat_object["e0"]["cost"]
+    if op_stat_object.get("e2", None):
+        e2_cost_gain = op_stat_object["e2"]["cost"] > op_stat_object["e1"]["cost"]
+    archetype_info["cost_gain_on_E1"] = e1_cost_gain
+    archetype_info["cost_gain_on_E2"] = e2_cost_gain
+
+    # Archetype Block Gains On Promotion
+    e1_block_gain = None
+    e2_block_gain = None
+    if op_stat_object.get("e1", None):
+        e1_block_gain = op_stat_object["e1"]["block"] > op_stat_object["e0"]["block"]
+    if op_stat_object.get("e2", None):
+        e2_block_gain = op_stat_object["e2"]["block"] > op_stat_object["e1"]["block"]
+    archetype_info["block_gain_on_E1"] = e1_block_gain
+    archetype_info["block_gain_on_E2"] = e2_block_gain
 
     return operator_info, archetype_info
 
 
 if __name__ == "__main__":
-    pprint(scrape("gavial-invincible"))
+    pprint(scrape("horn"))
