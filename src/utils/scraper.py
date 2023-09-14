@@ -61,8 +61,8 @@ def parse_pots(pot_soup):
         else:
             pot_desc = {}
             pot_stat = stat_lookup[pot.find("a").text.strip()]
-            pot_desc[pot_stat] = pot.find(
-                class_="potential-title").text.strip().replace("+", "")
+            pot_desc[pot_stat] = int(pot.find(
+                class_="potential-title").text.strip().replace("+", ""))
         output[pot_level] = pot_desc
     return output
 
@@ -71,8 +71,8 @@ def parse_trust(trust_soup):
     output = {}
     trust_stats = trust_soup.findAll("div", class_="potential-list")
     for stat in trust_stats:
-        output[stat_lookup[stat.find("a").text.strip()]] = stat.find(
-            class_="potential-title").text.strip().replace("+", "")
+        output[stat_lookup[stat.find("a").text.strip()]] = int(stat.find(
+            class_="potential-title").text.strip().replace("+", ""))
     return output
 
 
@@ -80,32 +80,22 @@ def parse_stat_obj(script):
     op_stat_str = re.findall('var myStats = ({.+})\s+var summon_stats',
                              script.text.replace("\n", ""))[0]
     op_stat_object = json.loads(op_stat_str)
+    new_stat_object = {}
+    for key in op_stat_object:
+        if op_stat_object[key]["cost"] != "":
+            new_stat_object[key] = {}
+            new_stat_object[key]["Base"] = {k: int(op_stat_object[key]["Base"][k])
+                                            for k in ["ATK", "DEF", "HP"]}
+            new_stat_object[key]["Max"] = {k: int(op_stat_object[key]["Max"][k])
+                                           for k in ["ATK", "DEF", "HP", "Level"]}
+            new_stat_object[key]["cost"] = int(op_stat_object[key]["cost"])
+            new_stat_object[key]["block"] = int(
+                op_stat_object[key]["Base"]["block"])
 
-    del op_stat_object["ne"]["arts"]
-    op_stat_object["ne"]["block"] = op_stat_object["ne"]["Base"]["block"]
-    del op_stat_object["ne"]["Base"]["block"]
-    del op_stat_object["ne"]["Max"]["block"]
+    new_stat_object["e0"] = new_stat_object["ne"]
+    del new_stat_object["ne"]
 
-    op_stat_object["e0"] = op_stat_object["ne"]
-    del op_stat_object["ne"]
-
-    if op_stat_object["e1"]["cost"] == "":
-        del op_stat_object["e1"]
-    else:
-        del op_stat_object["e1"]["arts"]
-        op_stat_object["e1"]["block"] = op_stat_object["e1"]["Base"]["block"]
-        del op_stat_object["e1"]["Base"]["block"]
-        del op_stat_object["e1"]["Max"]["block"]
-
-    if op_stat_object["e2"]["cost"] == "":
-        del op_stat_object["e2"]
-    else:
-        del op_stat_object["e2"]["arts"]
-        op_stat_object["e2"]["block"] = op_stat_object["e2"]["Base"]["block"]
-        del op_stat_object["e2"]["Base"]["block"]
-        del op_stat_object["e2"]["Max"]["block"]
-
-    return op_stat_object
+    return new_stat_object
 
 
 def mdy2ymd(date):
@@ -165,8 +155,12 @@ def scrape(name):
             "Block": "block",
             "Attack Interval": "interval"
         }
-        operator_info[stat_2nd_lookup[name]] = stat.find(
-            class_="effect-description").text.strip()
+        if name == "Attack Interval":
+            operator_info[stat_2nd_lookup[name]] = float(stat.find(
+                class_="effect-description").text.strip())
+        else:
+            operator_info[stat_2nd_lookup[name]] = int(stat.find(
+                class_="effect-description").text.strip())
 
     # Operator Level Stats
     op_stat_script_article = soup.find("article", class_="operator-node")
@@ -307,13 +301,13 @@ def scrape(name):
         skill_description_list = [item.text.strip() for item in cell.find(
             class_="skill-description").findAll(class_="effect-description")]
         skill_level_lookup = {
-            0: "SL1",
-            1: "SL2",
-            2: "SL3",
-            3: "SL4",
-            4: "SL5",
-            5: "SL6",
-            6: "SL7",
+            0: "L1",
+            1: "L2",
+            2: "L3",
+            3: "L4",
+            4: "L5",
+            5: "L6",
+            6: "L7",
             7: "M1",
             8: "M2",
             9: "M3",
@@ -324,8 +318,8 @@ def scrape(name):
                 parse_range(item) for item in cell.findAll(class_="range-box")]
         for i in range(len(sp_cost_list)):
             skill[skill_level_lookup[i]] = {
-                "sp_cost": sp_cost_list[i],
-                "initial_sp": initial_sp_list[i],
+                "sp_cost": int(sp_cost_list[i]),
+                "initial_sp": int(initial_sp_list[i]),
                 "skill_duration": skill_duration_list[i],
                 "skill_description": skill_description_list[i]
             }
@@ -342,5 +336,5 @@ def scrape(name):
 
 
 if __name__ == "__main__":
-    pprint(scrape("schwarz"))
+    pprint(scrape("horn"))
     # scrape("schwarz")
