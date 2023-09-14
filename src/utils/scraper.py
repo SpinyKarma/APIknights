@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from pprint import pprint
+import re
 ''' Pseudo code for scraper func
 
     Args:
@@ -77,6 +78,16 @@ def parse_trust(trust_soup):
     return output
 
 
+def mdy2ymd(date):
+    mdy = date.split("/")
+    ymd = [mdy[2], mdy[0], mdy[1]]
+    if len(ymd[1]) == 1:
+        ymd[1] = "0" + ymd[1]
+    if len(ymd[2]) == 1:
+        ymd[2] = "0" + ymd[2]
+    return "/".join(ymd)
+
+
 def scrape(name):
     url = "https://gamepress.gg/arknights/operator/"+name
     res = requests.get(url)
@@ -128,6 +139,47 @@ def scrape(name):
         operator_info[stat_2_lookup[name]] = stat.find(
             class_="effect-description").text.strip()
 
+    # EN Release Info
+    op_obtain_info = soup.find(class_="obtain-approach-table").text.strip()
+
+    en_release = re.search(
+        "Release Date \(Global\)\n(\d+/\d+/\d\d\d\d)",
+        op_obtain_info
+    )
+    en_recruit = re.search(
+        "Recruitment Pool Date \(Global\)\n(\d+/\d+/\d\d\d\d)",
+        op_obtain_info
+    )
+
+    operator_info["EN_released"] = True if en_release else False
+    operator_info["EN_release_date"] = mdy2ymd(
+        en_release.group(1)) if en_release else None
+    operator_info["EN_recruitable"] = True if en_recruit else False
+    operator_info["EN_recruitment_added"] = mdy2ymd(
+        en_recruit.group(1)) if en_recruit else None
+
+    # CN Release Info
+    # cn_release = re.search(
+    #     "Release Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
+    #     op_obtain_info
+    # )
+    # cn_recruit = re.search(
+    #     "Recruitment Pool Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
+    #     op_obtain_info
+    # )
+
+    # operator_info["CN_released"] = True if cn_release else False
+    # operator_info["CN_release_date"] = mdy2ymd(
+    #     cn_release.group(1)) if cn_release else None
+    # operator_info["CN_recruitable"] = True if cn_recruit else False
+    # operator_info["CN_recruitment_added"] = mdy2ymd(
+    #     cn_recruit.group(1)) if cn_recruit else None
+
+    # Limited?
+    limited = re.search("LIMITED", op_obtain_info)
+
+    operator_info["limited"] = True if limited else False
+
     # Archetype Name
     op_class = soup.findAll("div", class_="profession-title")
     archetype_info["archetype_name"] = op_class[1].text.strip()
@@ -155,10 +207,13 @@ def scrape(name):
     archetype_info["ranges"] = parse_range(class_ranges)
 
     # Archetype Trait
-    archetype_info["trait"] = op_desc[0].text.strip()
+    trait_info = op_desc[0]
+    for s in trait_info.select("pre"):
+        s.extract()
+    archetype_info["trait"] = trait_info.text.strip()
 
     return operator_info, archetype_info
 
 
 if __name__ == "__main__":
-    pprint(scrape("nightingale"))
+    pprint(scrape("gavial-invincible"))
