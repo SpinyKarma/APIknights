@@ -19,12 +19,13 @@ import json
             ##class "range-title-cell" for each range for promotion levels
             ##class "description-box" for trait, description and quote in that order
             ##class "sub-title-type-1" for potentials and trust bonuses
-            class "skill-section" for all skill info
+            ##class "skill-section" for all skill info
             class "talent-child" for talents
             ##class "obtain-approach-table" for obtain approach info
             ##class "obtain-limited" to check if limited op
             class "tag-cell" for tag info
             ##var myStats from last script in first article for base and per-level stats
+            module info
 '''
 
 stat_lookup = {
@@ -37,21 +38,17 @@ stat_lookup = {
 }
 
 
-def parse_range(range_dict):
-    output = {}
-    for key in range_dict:
-        tile_lookup = {"null-box": " ",
-                       "empty-box": chr(9633),
-                       "fill-box": chr(9632)}
-        soup = range_dict[key]
-        cols = soup.findAll("div", class_="range-cell")
-        tileset = []
-        for col in cols:
-            tiles = col.findAll("span")
-            column = "".join([tile_lookup[tile["class"][0]] for tile in tiles])
-            tileset.append(column)
-        output[key] = "\n".join(tileset)
-    return output
+def parse_range(range_soup):
+    tile_lookup = {"null-box": " ",
+                   "empty-box": chr(9633),
+                   "fill-box": chr(9632)}
+    cols = range_soup.findAll("div", class_="range-cell")
+    tileset = []
+    for col in cols:
+        tiles = col.findAll("span")
+        column = "".join([tile_lookup[tile["class"][0]] for tile in tiles])
+        tileset.append(column)
+    return "\n".join(tileset)
 
 
 def parse_pots(pot_soup):
@@ -126,6 +123,7 @@ def scrape(name):
     res = requests.get(url)
     operator_info = {}
     archetype_info = {}
+    skill_info = []
     soup = BeautifulSoup(res.text, 'html.parser')
 
     # Operator Name
@@ -230,6 +228,7 @@ def scrape(name):
 
     # Archetype Name
     archetype_info["archetype_name"] = op_class[1].text.strip()
+    operator_info["archetype_name"] = archetype_info["archetype_name"]
 
     # Archetype Trait
     trait_info = op_desc[0]
@@ -245,16 +244,24 @@ def scrape(name):
     archetype_info["attack_type"] = op_position[1].find("a").text
 
     # Archetype Range
-    class_ranges = {}
-    class_ranges["e0"] = soup.find("div", {"id": "image-tab-1"}
-                                   ).find("div", class_="range-box")
+    archetype_info["ranges"] = {}
+    archetype_info["ranges"]["e0"] = parse_range(
+        soup.find("div", {"id": "image-tab-1"}).find(
+            "div", class_="range-box"
+        )
+    )
     if operator_info["rarity"] > 2:
-        class_ranges["e1"] = soup.find("div", {"id": "image-tab-2"}
-                                       ).find("div", class_="range-box")
+        archetype_info["ranges"]["e1"] = parse_range(
+            soup.find("div", {"id": "image-tab-2"}).find(
+                "div", class_="range-box"
+            )
+        )
     if operator_info["rarity"] > 3:
-        class_ranges["e2"] = soup.find("div", {"id": "image-tab-3"}
-                                       ).find("div", class_="range-box")
-    archetype_info["ranges"] = parse_range(class_ranges)
+        archetype_info["ranges"]["e2"] = parse_range(
+            soup.find("div", {"id": "image-tab-3"}).find(
+                "div", class_="range-box"
+            )
+        )
 
     # Archetype Cost Gains On Promotion
     e1_cost_gain = None
@@ -282,8 +289,58 @@ def scrape(name):
         if operator_info["rarity"] > 3:
             del op_stat_object["e2"]["cost"], op_stat_object["e2"]["block"]
 
-    return operator_info, archetype_info
+    # Skill Info
+    for cell in soup.findAll("div", class_="skill-cell"):
+        skill = {}
+        skill["skill_name"] = re.findall("Skill \d: (.+)", cell.text)[0]
+        # if skill["skill_name"] == "Destreza":
+        #     print(cell)
+        skill["sp_type"] = re.findall("SP Charge Type\n\n(.+)", cell.text)[0]
+        skill["activation"] = re.findall(
+            "Skill Activation\n\n\n(.+)", cell.text)[0]
+        sp_cost_list = [item.text for item in cell.find(
+            class_="sp-cost").findAll(class_="effect-description")]
+        initial_sp_list = [item.text for item in cell.find(
+            class_="initial-sp").findAll(class_="effect-description")]
+        skill_duration_list = [item.text.strip() for item in cell.find(
+            class_="skill-duration").findAll(class_="effect-description")]
+        skill_description_list = [item.text.strip() for item in cell.find(
+            class_="skill-description").findAll(class_="effect-description")]
+        skill_level_lookup = {
+            0: "SL1",
+            1: "SL2",
+            2: "SL3",
+            3: "SL4",
+            4: "SL5",
+            5: "SL6",
+            6: "SL7",
+            7: "M1",
+            8: "M2",
+            9: "M3",
+        }
+        range_change = bool(cell.find(class_="skill-range-box"))
+        if range_change:
+            skill_range_list = [
+                parse_range(item) for item in cell.findAll(class_="range-box")]
+        for i in range(len(sp_cost_list)):
+            skill[skill_level_lookup[i]] = {
+                "sp_cost": sp_cost_list[i],
+                "initial_sp": initial_sp_list[i],
+                "skill_duration": skill_duration_list[i],
+                "skill_description": skill_description_list[i]
+            }
+            if range_change:
+                skill[skill_level_lookup[i]]["range"] = skill_range_list[i]
+        skill_info.append(skill)
+        if not operator_info.get("skill_1_name"):
+            operator_info["skill_1_name"] = skill["skill_name"]
+        elif not operator_info.get("skill_2_name"):
+            operator_info["skill_2_name"] = skill["skill_name"]
+        else:
+            operator_info["skill_3_name"] = skill["skill_name"]
+    return operator_info, archetype_info, skill_info
 
 
 if __name__ == "__main__":
-    pprint(scrape("horn"))
+    pprint(scrape("schwarz"))
+    # scrape("schwarz")
