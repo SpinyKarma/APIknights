@@ -21,10 +21,10 @@ import json
             ##class "sub-title-type-1" for potentials and trust bonuses
             class "skill-section" for all skill info
             class "talent-child" for talents
-            class "obtain-approach-table" for obtain approach info
-            class "obtain-limited" to check if limited op
+            ##class "obtain-approach-table" for obtain approach info
+            ##class "obtain-limited" to check if limited op
             class "tag-cell" for tag info
-            var myStats from last script in first article for base and per-level stats
+            ##var myStats from last script in first article for base and per-level stats
 '''
 
 stat_lookup = {
@@ -208,21 +208,21 @@ def scrape(name):
         en_recruit.group(1)) if en_recruit else None
 
     # CN Release Info
-    # cn_release = re.search(
-    #     "Release Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
-    #     op_obtain_info
-    # )
-    # cn_recruit = re.search(
-    #     "Recruitment Pool Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
-    #     op_obtain_info
-    # )
+    cn_release = re.search(
+        "Release Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
+        op_obtain_info
+    )
+    cn_recruit = re.search(
+        "Recruitment Pool Date \(CN\)\n(\d+/\d+/\d\d\d\d)",
+        op_obtain_info
+    )
 
-    # operator_info["CN_released"] = True if cn_release else False
-    # operator_info["CN_release_date"] = mdy2ymd(
-    #     cn_release.group(1)) if cn_release else None
-    # operator_info["CN_recruitable"] = True if cn_recruit else False
-    # operator_info["CN_recruitment_added"] = mdy2ymd(
-    #     cn_recruit.group(1)) if cn_recruit else None
+    operator_info["CN_released"] = True if cn_release else False
+    operator_info["CN_release_date"] = mdy2ymd(
+        cn_release.group(1)) if cn_release else None
+    operator_info["CN_recruitable"] = True if cn_recruit else False
+    operator_info["CN_recruitment_added"] = mdy2ymd(
+        cn_recruit.group(1)) if cn_recruit else None
 
     # Archetype Class Name
     op_class = soup.findAll("div", class_="profession-title")
@@ -259,22 +259,28 @@ def scrape(name):
     # Archetype Cost Gains On Promotion
     e1_cost_gain = None
     e2_cost_gain = None
-    if op_stat_object.get("e1", None):
+    if operator_info["rarity"] > 2:
         e1_cost_gain = op_stat_object["e1"]["cost"] > op_stat_object["e0"]["cost"]
-    if op_stat_object.get("e2", None):
-        e2_cost_gain = op_stat_object["e2"]["cost"] > op_stat_object["e1"]["cost"]
+        if operator_info["rarity"] > 3:
+            e2_cost_gain = op_stat_object["e2"]["cost"] > op_stat_object["e1"]["cost"]
     archetype_info["cost_gain_on_E1"] = e1_cost_gain
     archetype_info["cost_gain_on_E2"] = e2_cost_gain
 
     # Archetype Block Gains On Promotion
     e1_block_gain = None
     e2_block_gain = None
-    if op_stat_object.get("e1", None):
+    if operator_info["rarity"] > 2:
         e1_block_gain = op_stat_object["e1"]["block"] > op_stat_object["e0"]["block"]
-    if op_stat_object.get("e2", None):
-        e2_block_gain = op_stat_object["e2"]["block"] > op_stat_object["e1"]["block"]
+        if operator_info["rarity"] > 3:
+            e2_block_gain = op_stat_object["e2"]["block"] > op_stat_object["e1"]["block"]
     archetype_info["block_gain_on_E1"] = e1_block_gain
     archetype_info["block_gain_on_E2"] = e2_block_gain
+
+    del op_stat_object["e0"]["cost"], op_stat_object["e0"]["block"]
+    if operator_info["rarity"] > 2:
+        del op_stat_object["e1"]["cost"], op_stat_object["e1"]["block"]
+        if operator_info["rarity"] > 3:
+            del op_stat_object["e2"]["cost"], op_stat_object["e2"]["block"]
 
     return operator_info, archetype_info
 
