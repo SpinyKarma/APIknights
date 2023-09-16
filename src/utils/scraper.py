@@ -3,30 +3,6 @@ from bs4 import BeautifulSoup
 from pprint import pprint
 import re
 import json
-''' Pseudo code for scraper func
-
-    Args:
-        operator name (format of gamepress url)
-
-    Process:
-        go to gamepress/operator name
-        scrape:
-            ##id "page-title" for full operator name
-            ##class "rarity-cell" for rarity
-            ##class "profession-title" for class and archetype
-            ##class "information-cell" for position and attack type
-            ##class "alter-form" for alter operator
-            ##class "range-title-cell" for each range for promotion levels
-            ##class "description-box" for trait, description and quote in that order
-            ##class "sub-title-type-1" for potentials and trust bonuses
-            ##class "skill-section" for all skill info
-            class "talent-child" for talents
-            ##class "obtain-approach-table" for obtain approach info
-            ##class "obtain-limited" to check if limited op
-            class "tag-cell" for tag info
-            ##var myStats from last script in first article for base and per-level stats
-            module info
-'''
 
 stat_lookup = {
     "Deployment Cost": "DP Cost",
@@ -46,16 +22,17 @@ def parse_range(range_soup):
     tileset = []
     for col in cols:
         tiles = col.findAll("span")
-        column = "".join([tile_lookup[tile["class"][0]] for tile in tiles])
+        column = [tile_lookup[tile["class"][0]] for tile in tiles]
         tileset.append(column)
-    return "\n".join(tileset)
+    tileset = "\n".join(["".join(list(tup)) for tup in zip(*tileset)])
+    return tileset
 
 
 def parse_pots(pot_soup):
     output = {}
     pots = pot_soup.findAll("div", class_="potential-list")
     for pot in pots:
-        pot_level = pot.find("img")["src"].split("/")[-1][0]
+        pot_level = "pot" + pot.find("img")["src"].split("/")[-1][0]
         if pot.find(class_="potential-title").text.strip() == "":
             pot_desc = pot.find("a").text.strip()
         else:
@@ -114,6 +91,8 @@ def scrape(name):
     operator_info = {}
     archetype_info = {}
     skill_info = []
+    tags = {name: []}
+    modules = []
     soup = BeautifulSoup(res.text, 'html.parser')
 
     # Operator Name
@@ -127,8 +106,8 @@ def scrape(name):
     operator_info["gamepress_link"] = url
 
     # Operator Rarity
-    operator_info["rarity"] = len(
-        soup.find("div", class_="rarity-cell").findAll("img"))
+    rarity = len(soup.find("div", class_="rarity-cell").findAll("img"))
+    operator_info["rarity"] = rarity
 
     # Operator Description
     op_desc = soup.findAll("div", class_="description-box")
@@ -147,7 +126,7 @@ def scrape(name):
     # Operator Secondary Stats
     op_2nd_stats = soup.findAll("div", class_="other-stat-value-cell")
     for stat in op_2nd_stats:
-        name = stat.find(class_="effect-title").text.strip()
+        stat_name = stat.find(class_="effect-title").text.strip()
         stat_2nd_lookup = {
             "Arts Resist": "resist",
             "Redeploy Time": "redeploy",
@@ -155,11 +134,11 @@ def scrape(name):
             "Block": "block",
             "Attack Interval": "interval"
         }
-        if name == "Attack Interval":
-            operator_info[stat_2nd_lookup[name]] = float(stat.find(
+        if stat_name == "Attack Interval":
+            operator_info[stat_2nd_lookup[stat_name]] = float(stat.find(
                 class_="effect-description").text.strip())
         else:
-            operator_info[stat_2nd_lookup[name]] = int(stat.find(
+            operator_info[stat_2nd_lookup[stat_name]] = int(stat.find(
                 class_="effect-description").text.strip())
 
     # Operator Level Stats
@@ -175,6 +154,27 @@ def scrape(name):
     # Operator Trust Bonuses
     op_trust = soup.find("div", class_="trust-cell")
     operator_info["trust_stats"] = parse_trust(op_trust)
+
+    # Operator Talents Info
+    talents = {}
+    for t in soup.findAll("div", class_="talent-child"):
+        t_name = t.find(class_="talent-title").text.strip()
+        t_L = t.find(class_="operator-level").text.strip().split()[1]
+        t_E = t.find(
+            class_="elite-level").find("img")["src"].split("/")[-1][0]
+        t_EL = "e"+t_E+"/l"+t_L
+        t_pot = "pot"+t.find(
+            class_="potential-level").find("img")["src"].split("/")[-1][0]
+        t_desc = t.find(
+            class_="talent-description").text.strip()
+        if not talents.get(t_name):
+            talents[t_name] = {t_EL: {t_pot: t_desc}}
+        else:
+            if not talents[t_name].get(t_EL):
+                talents[t_name][t_EL] = {t_pot: t_desc}
+            else:
+                talents[t_name][t_EL][t_pot] = t_desc
+    operator_info["talents"] = talents
 
     # Limited
     op_obtain_info = soup.find(class_="obtain-approach-table").text.strip()
@@ -244,13 +244,13 @@ def scrape(name):
             "div", class_="range-box"
         )
     )
-    if operator_info["rarity"] > 2:
+    if rarity > 2:
         archetype_info["ranges"]["e1"] = parse_range(
             soup.find("div", {"id": "image-tab-2"}).find(
                 "div", class_="range-box"
             )
         )
-    if operator_info["rarity"] > 3:
+    if rarity > 3:
         archetype_info["ranges"]["e2"] = parse_range(
             soup.find("div", {"id": "image-tab-3"}).find(
                 "div", class_="range-box"
@@ -260,9 +260,9 @@ def scrape(name):
     # Archetype Cost Gains On Promotion
     e1_cost_gain = None
     e2_cost_gain = None
-    if operator_info["rarity"] > 2:
+    if rarity > 2:
         e1_cost_gain = op_stat_object["e1"]["cost"] > op_stat_object["e0"]["cost"]
-        if operator_info["rarity"] > 3:
+        if rarity > 3:
             e2_cost_gain = op_stat_object["e2"]["cost"] > op_stat_object["e1"]["cost"]
     archetype_info["cost_gain_on_E1"] = e1_cost_gain
     archetype_info["cost_gain_on_E2"] = e2_cost_gain
@@ -270,25 +270,23 @@ def scrape(name):
     # Archetype Block Gains On Promotion
     e1_block_gain = None
     e2_block_gain = None
-    if operator_info["rarity"] > 2:
+    if rarity > 2:
         e1_block_gain = op_stat_object["e1"]["block"] > op_stat_object["e0"]["block"]
-        if operator_info["rarity"] > 3:
+        if rarity > 3:
             e2_block_gain = op_stat_object["e2"]["block"] > op_stat_object["e1"]["block"]
     archetype_info["block_gain_on_E1"] = e1_block_gain
     archetype_info["block_gain_on_E2"] = e2_block_gain
 
     del op_stat_object["e0"]["cost"], op_stat_object["e0"]["block"]
-    if operator_info["rarity"] > 2:
+    if rarity > 2:
         del op_stat_object["e1"]["cost"], op_stat_object["e1"]["block"]
-        if operator_info["rarity"] > 3:
+        if rarity > 3:
             del op_stat_object["e2"]["cost"], op_stat_object["e2"]["block"]
 
     # Skill Info
     for cell in soup.findAll("div", class_="skill-cell"):
         skill = {}
         skill["skill_name"] = re.findall("Skill \d: (.+)", cell.text)[0]
-        # if skill["skill_name"] == "Destreza":
-        #     print(cell)
         skill["sp_type"] = re.findall("SP Charge Type\n\n(.+)", cell.text)[0]
         skill["activation"] = re.findall(
             "Skill Activation\n\n\n(.+)", cell.text)[0]
@@ -298,8 +296,15 @@ def scrape(name):
             class_="initial-sp").findAll(class_="effect-description")]
         skill_duration_list = [item.text.strip() for item in cell.find(
             class_="skill-duration").findAll(class_="effect-description")]
-        skill_description_list = [item.text.strip() for item in cell.find(
-            class_="skill-description").findAll(class_="effect-description")]
+        skill_description_list = cell.find(
+            class_="skill-description").findAll(class_="effect-description")
+        for skill_description in skill_description_list:
+            for br in skill_description.select("br"):
+                br.replace_with("\n")
+            for rem in skill_description.findAll("span", class_="skill-description-rem"):
+                rem.insert_before("\n")
+        skill_description_list = [item.text.replace("\n\n", "\n").strip()
+                                  for item in skill_description_list]
         skill_level_lookup = {
             0: "L1",
             1: "L2",
@@ -332,9 +337,73 @@ def scrape(name):
             operator_info["skill_2_name"] = skill["skill_name"]
         else:
             operator_info["skill_3_name"] = skill["skill_name"]
-    return operator_info, archetype_info, skill_info
+
+    # Tags
+    tag_soup = soup.find(class_="tag-cell").findAll(class_="tag-title")
+    tags[name] = [tag.text.strip() for tag in tag_soup]
+
+    # Modules
+    module_soup = soup.findAll(class_="view-modules-on-operator")[1]
+    mod_levels = module_soup.findAll(class_="views-row")[1:]
+    for mod in mod_levels:
+        m_name = mod.find(class_="module-title").text.strip().split("\n")[0]
+        m_level = mod.find(
+            class_="module-title"
+        ).text.strip().split("\n")[1][-1]
+        m_stat_lookup = {
+            "max_hp": "HP",
+            "atk": "ATK",
+            "def": "DEF",
+            "cost": "DP Cost",
+            "attack_speed": "ASPD",
+            "respawn_time": "Redeploy Time"
+        }
+        m_stats_table = mod.find("table").findAll("tr")[1:]
+        m_stats = {
+            m_stat_lookup.get(
+                tr.find("th").text, tr.find("th").text
+            ): int(tr.find("td").text) for tr in m_stats_table
+        }
+        if m_level == "1":
+            m_trait = mod.find(class_="module-row-2")
+            for item in m_trait.select("substitute"):
+                item.replace_with("<Substitute>" + item.text)
+            m_trait = m_trait.text.split("\n")[2]
+            module = {
+                "module_name": m_name,
+                "level_1_trait_upgrade": m_trait,
+                "level_1_stats": m_stats
+            }
+        else:
+            m_t_soup = mod.find(
+                class_="accordion-custom-content").findAll(class_="field__item")
+            mod_talent = {}
+            for t in m_t_soup:
+                m_t_name = t.find(
+                    class_="module-talent-name").text.strip()
+                m_t_level = f"e2/l{rarity}0"
+                m_t_pot = "pot"+t.find(
+                    class_="module-talent-row-1").findAll("img")[1]["src"].split("/")[-1][0]
+                m_t_desc = t.find(
+                    class_="module-talent-row-2").text.strip()
+                if not mod_talent.get(m_t_name):
+                    mod_talent[m_t_name] = {m_t_level: {m_t_pot: m_t_desc}}
+                else:
+                    if not mod_talent[m_t_name].get(m_t_level):
+                        mod_talent[m_t_name][m_t_level] = {m_t_pot: m_t_desc}
+                    else:
+                        mod_talent[m_t_name][m_t_level][m_t_pot] = m_t_desc
+            module[f"level_{m_level}_stats"] = m_stats
+            module[f"level_{m_level}_talent"] = mod_talent
+        if m_level == "3":
+            modules.append(module)
+            if not operator_info.get("module_1_name"):
+                operator_info["module_1_name"] = m_name
+            else:
+                operator_info["module_2_name"] = m_name
+    return operator_info, archetype_info, skill_info, tags, modules
 
 
 if __name__ == "__main__":
-    pprint(scrape("horn"))
-    # scrape("schwarz")
+    pprint(scrape("eyjafjalla"))
+    # scrape("archetto")
