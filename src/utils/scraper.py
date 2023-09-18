@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from pprint import pprint
+# from pprint import pprint
 import re
 import json
 
@@ -404,6 +404,6 @@ def scrape(name):
     return operator_info, archetype_info, skill_info, tags, modules
 
 
-if __name__ == "__main__":
-    pprint(scrape("eyjafjalla"))
+# if __name__ == "__main__":
+    # pprint(scrape("eyjafjalla"))
     # scrape("archetto")

@@ -162,4 +162,5 @@ cython_debug/
 # Misc
 ERD.pdf
 ERD.png
-table_changes.txt
+TO_DO.txt
+src/db/*.txt
