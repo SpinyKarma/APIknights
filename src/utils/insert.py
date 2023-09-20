@@ -1,175 +1,319 @@
-from pg8000.native import Connection, identifier as identifier, literal as literal
-from dotenv import load_dotenv
-from os import getenv
-from scraper import scrape
 from pg8000.exceptions import DatabaseError
-from warn import warn, err
+from copy import deepcopy
+from src.utils.connect import connect
+from src.utils.scraper import scrape
 from pprint import pprint
-import json
+from src.utils.formatting import insert_query, update_query, lit, warn
 
 
-load_dotenv()
+def dict_res(db, query):
+    ''' Runs a query to a postgres database and returns the response as a list
+        of dictionaies with the column headings as keys and the row data as
+        values.
 
-user = getenv("PGUSER")
-password = getenv("PGPASSWORD")
+        Args:
+            db:
+                The connection object to run the query string with.
+            query:
+                The query string to be run.
+
+        Returns:
+            res_dicts:
+                The response from the db formatted as a list of dicts, one per
+                returned row, with the column headings as the keys.
+    '''
+    res = db.run(query)
+    cols = [col["name"] for col in db.columns]
+    res_dicts = [{cols[i]: item[i] for i in range(len(cols))} for item in res]
+    return res_dicts
 
 
-def dict_res(res, dbcolumns):
-    cols = [col["name"] for col in dbcolumns]
-    return {cols[i]: res[0][i] for i in range(len(res[0]))}
+def merge(old, new):
+    ''' Take two dicts (old first), merges them, choosing which to take values
+        from based on a particular ruleset.
 
+        If either has a None vaue, take from the other.
+        If the value is a dict, recursively merge the dict.
+        If the values are different, take the value from the newer one.
+        If they're the same, it doesn't matter which so take from older one.
 
-def merge(stored, fresh):
-    output = {}
-    for key in set(list(fresh.keys())+list(stored.keys())):
+        Args:
+            old:
+                The dict of the data pulled from the db, assumed older.
+            new:
+                The dict of the data waiting to be added to db, assumed newer.
+
+        Returns:
+            merged:
+                The result of merging the two dicts according to above rules.
+    '''
+    merged = {}
+    for key in set(list(new.keys())+list(old.keys())):
         # print(key)
-        if stored.get(key) == None:
+        if old.get(key) == None:
             # print("overwriting Null value")
-            output[key] = fresh[key]
-        if fresh.get(key) == None:
-            # print("keeping stored value")
-            output[key] = stored[key]
-        elif isinstance(fresh.get(key), dict):
+            merged[key] = new[key]
+        if new.get(key) == None:
+            # print("keeping old value")
+            merged[key] = old[key]
+        elif isinstance(new.get(key), dict) and isinstance(old.get(key), dict):
             # print(key+" is a dict")
-            output[key] = merge(stored[key], fresh[key])
-        elif stored.get(key) != fresh.get(key):
+            merged[key] = merge(old[key], new[key])
+        elif old.get(key) != new.get(key):
             # print("updating with new data")
-            output[key] = fresh[key]
+            merged[key] = new[key]
         else:
-            # print("no change, keeing stored")
-            output[key] = stored[key]
-    return output
+            # print("no change, keeing old")
+            merged[key] = old[key]
+    return merged
 
 
-def insert(operator_info, archetype_info, skill_info, tags, modules):
+def insert_archetype(archetype_info):
+    ''' Take the archetype_info dict, compare it to the stored version, insert
+        if not found. If found update if necessary, do nothing if not. Return 
+        the archetype_id from the stored version either from the query or after
+        inserting.
+    '''
+    # Copy the dict to avoid mutation
+    a_info = deepcopy(archetype_info)
+    # Extract the name for easy access
+    a_name = a_info["archetype_name"]
+    with connect() as db:
+        # Check for the stored version using the name to filter
+        query = "SELECT * FROM archetypes WHERE "
+        query += f"archetype_name = {lit(a_name)};"
+        stored = dict_res(db, query)
+        # If not found then insert and return the assigned archetype_id
+        if stored == []:
+            headings = [key for key in a_info]
+            data = [a_info[key] for key in a_info]
+            query = insert_query("archetypes", headings,
+                                 data, ["archetype_id"])
+            a_id = dict_res(db, query)[0]["archetype_id"]
+        else:
+            stored = stored[0]
+            # If found then extract the archetype_id
+            a_id = stored["archetype_id"]
+            # Compare the stored version with the current version
+            updated = merge(stored, a_info)
+            changes = {
+                key: updated[key]
+                for key in updated if updated[key] != stored[key]
+            }
+            # If any values need updating then run an update query
+            if changes != {}:
+                query = update_query(
+                    "archetypes",
+                    changes,
+                    {"archetype_id": a_id}
+                )
+                db.run(query)
+        # Return the archetype_id
+        return a_id
+
+
+def insert_module(module_info):
+    ''' Take a module_info dict, query the stored version, insert if not found.
+        If found skip. Return the module_id from the stored version either
+        from the query or after inserting.
+    '''
+    # Copy the dict to avoid mutation
+    m_info = deepcopy(module_info)
+    # Extract the name for easy access
+    m_name = m_info["module_name"]
+
+    with connect() as db:
+        # Check for the stored version using the name to filter
+        query = f"SELECT * FROM modules WHERE module_name = {lit(m_name)};"
+        stored = dict_res(db, query)
+        # If not found then insert and return the assigned module_id
+        if stored == []:
+            headings = [key for key in m_info]
+            data = [m_info[key] for key in m_info]
+            # pprint(data)
+            query = insert_query("modules", headings, data, ["module_id"])
+            # pprint(query)
+            m_id = dict_res(db, query)[0]["module_id"]
+        # If found then extract the module_id
+        else:
+            stored = stored[0]
+            # print(f"module {m_name} already in db, skipping")
+            m_id = stored["module_id"]
+        # pprint(m_info)
+        return m_id
+
+
+def insert_skill(skill_info):
+    ''' Take a skill_info dict, query the stored version, insert if not found.
+        If found skip. Return the skill_id from the stored version either
+        from the query or after inserting.
+    '''
+    # Copy the dict to avoid mutation
+    s_info = deepcopy(skill_info)
+    # Extract the name for easy access
+    s_name = s_info["skill_name"]
+    with connect() as db:
+        # Check for the stored version using the name to filter
+        query = f"SELECT * FROM skills WHERE skill_name = {lit(s_name)};"
+        stored = dict_res(db, query)
+        # If not found then insert and return the assigned skill_id
+        if stored == []:
+            headings = [key for key in s_info]
+            data = [s_info[key] for key in s_info]
+            # pprint(data)
+            query = insert_query("skills", headings, data, ["skill_id"])
+            # pprint(query)
+            s_id = dict_res(db, query)[0]["skill_id"]
+        # If found then extract the skill_id
+        else:
+            stored = stored[0]
+            # print(f"skill {s_name} already in db, skipping")
+            s_id = stored["skill_id"]
+        # pprint(s_info)
+        return s_id
+
+
+def insert_operator(operator_info, archetype_id, module_ids, skill_ids):
+    ''' Take the operator_info dict, query the stored version, insert if not
+        found. If operator has an alter and that alter is in the database,
+        modify both to reflect that, if alter not found then make None.
+        If operator found in db then skip. Return the operator_id from the
+        stored version either from the query or after inserting.
+    '''
+    # Copy the dict to avoid mutation
+    o_info = deepcopy(operator_info)
+    # Extract the name for easy access
+    o_name = o_info["operator_name"]
+    with connect() as db:
+        # Check for the stored version using the name to filter
+        query = "SELECT * FROM operators WHERE "
+        query += f"operator_name = {lit(o_name)};"
+        stored = dict_res(db, query)
+        # If not found then insert and return the assigned operator_id
+        if stored == []:
+            alter_update = False
+            # print(archetype_id, module_ids, skill_ids)
+            # Assign all the relevant ids to the operator before insertion
+            o_info["archetype_id"] = archetype_id
+            for i in range(len(module_ids)):
+                o_info[f"module_{i+1}_id"] = module_ids[i][0]
+            for i in range(len(skill_ids)):
+                o_info[f"skill_{i+1}_id"] = skill_ids[i][0]
+            alter = o_info.get("alter")
+            # If the operator has a listed alter, query the db to find them
+            if alter:
+                query = "SELECT operator_id FROM operators "
+                query += f"WHERE operator_name = {lit(alter)};"
+                stored_alter = dict_res(
+                    db,
+                )
+                # If the alter isn't found then set alter to None on the op
+                if stored_alter == []:
+                    o_info["alter"] = None
+                # Else take the alter's operator_id and flip a bool so the
+                # alter's alter can be modified later to match
+                else:
+                    o_info["alter"] = stored_alter[0]["operator_id"]
+                    alter_update = True
+            # Insert the operator_info psot modification, returning the
+            # assigned id
+            headings = [key for key in o_info]
+            data = [o_info[key] for key in o_info]
+            # pprint(headings)
+            # print("")
+            # pprint(data)
+            query = insert_query("operators", headings, data, ["operator_id"])
+            o_id = dict_res(db, query)[0]["operator_id"]
+            # If the bool was flipped earlier, then the alter needs it's alter
+            # to reflect this operator now being in the db
+            if alter_update:
+                query = update_query(
+                    "operators",
+                    {"alter": o_id},
+                    {"operator_id": o_info["alter"]}
+                )
+                db.run(query)
+        # If found then extract the operator_id
+        else:
+            stored = stored[0]
+            # print(f"operator {o_name} already in db, skipping")
+            o_id = stored["operator_id"]
+        return o_id
+
+
+def insert_tags(tag_info):
+    tag_ids = []
+    with connect() as db:
+        stored = db.run("SELECT * FROM tags;")
+        stored_names = {tag[1]: tag[0] for tag in stored}
+        for tag in tag_info:
+            if tag in stored_names:
+                tag_ids.append(stored_names[tag])
+            else:
+                query = insert_query("tags", "tag_name", tag, ["tag_id"])
+                tag_id = dict_res(db, query)[0]["tag_id"]
+                tag_ids.append(tag_id)
+    return tag_ids
+
+
+def insert_operators_tags(o_id, tag_ids):
+    with connect() as db:
+        query = "SELECT tag_id FROM operators_tags WHERE "
+        query += f"operator_id = {lit(o_id)};"
+        stored = db.run(query)
+        stored = [item[0] for item in stored]
+        for tag in tag_ids:
+            if tag not in stored:
+                query = insert_query(
+                    "operators_tags", ["operator_id", "tag_id"], [o_id, tag]
+                )
+                db.run(query)
+
+
+def insert(operator_info, archetype_info, skill_info, tag_info, module_info):
     try:
-        db = Connection(user, database="apiknights", password=password)
+        db = connect()
+        db.close()
     except DatabaseError as e:
         warn("Database does not exist yet, run 'seed-db.sh' to initialise.")
         raise e
 
     # Archetypes
-    stored_A = db.run(
-        f"SELECT * FROM archetypes WHERE archetype_name = {literal(archetype_info['archetype_name'])}")
-
-    if stored_A != []:
-        archetype_id = stored_A[0][0]
-        stored_A = dict_res(stored_A, db.columns)
-        updated_A = merge(stored_A, archetype_info)
-        changes_A = [
-            key for key in updated_A if updated_A[key] != stored_A[key]]
-        if changes_A != []:
-            print(
-                f"change in {archetype_info['archetype_name']} archetype data")
-            updated_A["ranges"] = json.dumps(updated_A["ranges"])
-            data = ", ".join([f"{identifier(key)} = {literal(updated_A[key])}"
-                              for key in changes_A])
-            db.run(
-                f"UPDATE archetypes SET {data} WHERE archetype_id = {literal(archetype_id)};")
-        else:
-            print(
-                f"no change in {archetype_info['archetype_name']} archetype data")
-    else:
-        print(f"new archetype {archetype_info['archetype_name']}")
-        headings_A = ', '.join([identifier(key) for key in archetype_info])
-        # print(headings_A)
-        archetype_info["ranges"] = json.dumps(archetype_info["ranges"])
-        data = ", ".join([literal(archetype_info[key])
-                          for key in archetype_info])
-        # print(data)
-        # print(literal(archetype_info["ranges"]))
-        archetype_id = db.run(
-            f"INSERT INTO archetypes ({headings_A}) VALUES ({data}) RETURNING archetype_id;")[0][0]
+    archetype_id = insert_archetype(archetype_info)
+    # print("Archetype ID: ", archetype_id, "\n")
 
     # Modules
-    mod_ids = {}
-    for mod in modules:
-        stored_M = db.run(
-            f"SELECT * FROM modules WHERE module_name = {literal(mod['module_name'])};")
-        if stored_M != []:
-            print("module data already in db, skipping")
-            # pprint(stored_M)
-            mod_ids[stored_M[0][1]] = stored_M[0][0]
-        else:
-            headings_M = ', '.join([identifier(key) for key in mod])
-            # print(headings_M)
-            mod["level_1_stats"] = json.dumps(mod["level_1_stats"])
-            mod["level_2_talent"] = json.dumps(mod["level_2_talent"])
-            mod["level_2_stats"] = json.dumps(mod["level_2_stats"])
-            mod["level_3_talent"] = json.dumps(mod["level_3_talent"])
-            mod["level_3_stats"] = json.dumps(mod["level_3_stats"])
-            data = ", ".join([literal(mod[key])for key in mod])
-            # print(data)
-            mod_id = db.run(
-                f"INSERT INTO modules ({headings_M}) VALUES ({data}) RETURNING module_id;")[0][0]
-            mod_ids[mod["module_name"]] = mod_id
-    print(mod_ids)
+    module_ids = []
+    for mod in module_info:
+        module_ids.append([insert_module(mod)])
+    # print("Module IDs: ", module_ids, "\n")
 
     # Skills
-    skill_ids = {}
+    skill_ids = []
     for skill in skill_info:
-        stored_S = db.run(
-            f"SELECT * FROM skills WHERE skill_name = {literal(skill['skill_name'])};")
-        if stored_S != []:
-            print("skill data already in db, skipping")
-            # pprint(stored_S)
-            skill_ids[stored_S[0][1]] = stored_S[0][0]
-        else:
-            headings_S = ', '.join([identifier(key) for key in skill])
-            # print(headings_S)
-            skill["l1"] = json.dumps(skill["l1"])
-            skill["l2"] = json.dumps(skill["l2"])
-            skill["l3"] = json.dumps(skill["l3"])
-            skill["l4"] = json.dumps(skill["l4"])
-            skill["l5"] = json.dumps(skill["l5"])
-            skill["l6"] = json.dumps(skill["l6"])
-            skill["l7"] = json.dumps(skill["l7"])
-            if skill.get("m1"):
-                skill["m1"] = json.dumps(skill["m1"])
-            if skill.get("m2"):
-                skill["m2"] = json.dumps(skill["m2"])
-            if skill.get("m3"):
-                skill["m3"] = json.dumps(skill["m3"])
-            data = ", ".join([literal(skill[key])for key in skill])
-            # print(data)
-            skill_id = db.run(
-                f"INSERT INTO skills ({headings_S}) VALUES ({data}) RETURNING skill_id;")[0][0]
-            skill_ids[skill["skill_name"]] = skill_id
-    print(skill_ids)
-
-    # Tags
-    op_tag_ids = []
-    stored_T = db.run(
-        f"SELECT * FROM tags;")
-    stored_T_names = {tag[1]: tag[0] for tag in stored_T}
-    for tag in tags:
-        if tag in stored_T_names:
-            op_tag_ids.append(stored_T_names[tag])
-        else:
-            tag_id = db.run(
-                f"INSERT INTO tags (tag_name) VALUES ({literal(tag)}) RETURNING tag_id;")[0][0]
-            op_tag_ids.append(tag_id)
-    pprint(stored_T_names)
-    print(op_tag_ids)
+        skill_ids.append([insert_skill(skill)])
+    # print("Skill IDs: ", skill_ids, "\n")
 
     # Operators
-    # query operators table for op using operator_info["operator_name"]
-    # if exists:
-    #   skip (in future: compare and update if necessary)
-    #   grab op_id from query
-    # else:
-    #   substitute archetype/module/skill names for ids using archetype_id, skill_ids, mod_ids
-    #   dump all json keys
-    #   insert, returning op_id
+    operator_id = insert_operator(
+        operator_info,
+        archetype_id,
+        module_ids,
+        skill_ids
+    )
+    # print("Operator ID: ", operator_id, "\n")
 
     # Tags
-    # query operators_tags table for ops tags using op_id
-    # for each tag relation in op_tag_ids:
-    #   if exists in query result:
-    #     skip
-    #   else:
-    #     insert
+    tag_ids = insert_tags(tag_info)
+    # print("Tag IDs: ", tag_ids)
+
+    # Operators Tags
+    insert_operators_tags(operator_id, tag_ids)
 
 
 if __name__ == "__main__":
-    insert(*scrape("kroos"))
+    #     # insert(*scrape("blue-poison"))
+    pprint(update_query("banana", {"a": "b", "c": "d"}, [
+           ["e", "f"], ["g", "h"]]))
+#     with connect() as db:
+#         pprint(dict_res(db, "SELECT archetype_name FROM archetypes;"))

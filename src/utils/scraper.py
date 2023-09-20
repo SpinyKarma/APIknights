@@ -225,7 +225,6 @@ def scrape(name):
     archetype_info["archetype_name"] = op_class[1].text.strip()
     if rarity == 1:
         archetype_info["archetype_name"] += " (1*)"
-    operator_info["archetype_name"] = archetype_info["archetype_name"]
 
     # Archetype Trait
     trait_info = op_desc[0]
@@ -334,12 +333,6 @@ def scrape(name):
             if range_change:
                 skill[skill_level_lookup[i]]["range"] = skill_range_list[i]
         skill_info.append(skill)
-        if not operator_info.get("skill_1_name"):
-            operator_info["skill_1_name"] = skill["skill_name"]
-        elif not operator_info.get("skill_2_name"):
-            operator_info["skill_2_name"] = skill["skill_name"]
-        else:
-            operator_info["skill_3_name"] = skill["skill_name"]
 
     # Tags
     tag_soup = soup.find(class_="tag-cell").findAll(class_="tag-title")
@@ -400,10 +393,6 @@ def scrape(name):
             module[f"level_{m_level}_talent"] = mod_talent
         if m_level == "3":
             modules.append(module)
-            if not operator_info.get("module_1_name"):
-                operator_info["module_1_name"] = m_name
-            else:
-                operator_info["module_2_name"] = m_name
     return operator_info, archetype_info, skill_info, tags, modules
 
 
