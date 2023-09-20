@@ -31,7 +31,7 @@ CREATE TABLE modules (
 
 CREATE TABLE skills (
     skill_id SERIAL PRIMARY KEY,
-    skil_name VARCHAR NOT NULL,
+    skill_name VARCHAR NOT NULL,
     sp_type VARCHAR NOT NULL,
     activation_type VARCHAR NOT NULL,
     l1 JSON NOT NULL,

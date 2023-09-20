@@ -10,7 +10,8 @@ stat_lookup = {
     "Maximum HP": "HP",
     "Attack Power": "ATK",
     "Defense": "DEF",
-    "Arts Resistance": "Arts Resist"
+    "Arts Resistance": "Arts Resist",
+    "Attack Speed": "ASPD"
 }
 
 
@@ -91,7 +92,7 @@ def scrape(name):
     operator_info = {}
     archetype_info = {}
     skill_info = []
-    tags = {name: []}
+    tags = []
     modules = []
     soup = BeautifulSoup(res.text, 'html.parser')
 
@@ -222,7 +223,8 @@ def scrape(name):
 
     # Archetype Name
     archetype_info["archetype_name"] = op_class[1].text.strip()
-    operator_info["archetype_name"] = archetype_info["archetype_name"]
+    if rarity == 1:
+        archetype_info["archetype_name"] += " (1*)"
 
     # Archetype Trait
     trait_info = op_desc[0]
@@ -264,8 +266,8 @@ def scrape(name):
         e1_cost_gain = op_stat_object["e1"]["cost"] > op_stat_object["e0"]["cost"]
         if rarity > 3:
             e2_cost_gain = op_stat_object["e2"]["cost"] > op_stat_object["e1"]["cost"]
-    archetype_info["cost_gain_on_E1"] = e1_cost_gain
-    archetype_info["cost_gain_on_E2"] = e2_cost_gain
+    archetype_info["cost_on_e1"] = e1_cost_gain
+    archetype_info["cost_on_e2"] = e2_cost_gain
 
     # Archetype Block Gains On Promotion
     e1_block_gain = None
@@ -274,8 +276,8 @@ def scrape(name):
         e1_block_gain = op_stat_object["e1"]["block"] > op_stat_object["e0"]["block"]
         if rarity > 3:
             e2_block_gain = op_stat_object["e2"]["block"] > op_stat_object["e1"]["block"]
-    archetype_info["block_gain_on_E1"] = e1_block_gain
-    archetype_info["block_gain_on_E2"] = e2_block_gain
+    archetype_info["block_on_e1"] = e1_block_gain
+    archetype_info["block_on_e2"] = e2_block_gain
 
     del op_stat_object["e0"]["cost"], op_stat_object["e0"]["block"]
     if rarity > 2:
@@ -288,7 +290,7 @@ def scrape(name):
         skill = {}
         skill["skill_name"] = re.findall("Skill \d: (.+)", cell.text)[0]
         skill["sp_type"] = re.findall("SP Charge Type\n\n(.+)", cell.text)[0]
-        skill["activation"] = re.findall(
+        skill["activation_type"] = re.findall(
             "Skill Activation\n\n\n(.+)", cell.text)[0]
         sp_cost_list = [item.text for item in cell.find(
             class_="sp-cost").findAll(class_="effect-description")]
@@ -306,16 +308,16 @@ def scrape(name):
         skill_description_list = [item.text.replace("\n\n", "\n").strip()
                                   for item in skill_description_list]
         skill_level_lookup = {
-            0: "L1",
-            1: "L2",
-            2: "L3",
-            3: "L4",
-            4: "L5",
-            5: "L6",
-            6: "L7",
-            7: "M1",
-            8: "M2",
-            9: "M3",
+            0: "l1",
+            1: "l2",
+            2: "l3",
+            3: "l4",
+            4: "l5",
+            5: "l6",
+            6: "l7",
+            7: "m1",
+            8: "m2",
+            9: "m3",
         }
         range_change = bool(cell.find(class_="skill-range-box"))
         if range_change:
@@ -331,16 +333,10 @@ def scrape(name):
             if range_change:
                 skill[skill_level_lookup[i]]["range"] = skill_range_list[i]
         skill_info.append(skill)
-        if not operator_info.get("skill_1_name"):
-            operator_info["skill_1_name"] = skill["skill_name"]
-        elif not operator_info.get("skill_2_name"):
-            operator_info["skill_2_name"] = skill["skill_name"]
-        else:
-            operator_info["skill_3_name"] = skill["skill_name"]
 
     # Tags
     tag_soup = soup.find(class_="tag-cell").findAll(class_="tag-title")
-    tags[name] = [tag.text.strip() for tag in tag_soup]
+    tags = [tag.text.strip() for tag in tag_soup]
 
     # Modules
     module_soup = soup.findAll(class_="view-modules-on-operator")[1]
@@ -397,10 +393,6 @@ def scrape(name):
             module[f"level_{m_level}_talent"] = mod_talent
         if m_level == "3":
             modules.append(module)
-            if not operator_info.get("module_1_name"):
-                operator_info["module_1_name"] = m_name
-            else:
-                operator_info["module_2_name"] = m_name
     return operator_info, archetype_info, skill_info, tags, modules
 
 
