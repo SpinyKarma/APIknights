@@ -1,27 +1,14 @@
 from src.utils.formatting import (
-    warn,
-    err,
     j_d,
     idf,
     lit,
+    select_query,
     insert_query,
     update_query
 )
 from pg8000.native import identifier, literal
 from unittest.mock import patch
 import json
-
-
-class Test_warn_err:
-    @patch("builtins.print")
-    def test_warn_applies_yellow_colour_to_print(self, test_print):
-        warn("banana")
-        test_print.assert_called_with("\033[93mbanana\033[0m")
-
-    @patch("builtins.print")
-    def test_err_applies_red_colour_to_print(self, test_print):
-        err("apple")
-        test_print.assert_called_with("\033[91mapple\033[0m")
 
 
 class Test_j_d:
@@ -89,6 +76,77 @@ class Test_lit:
         flat_out = [item for sublist in out for item in sublist]
         for i in range(len(flat_list)):
             assert literal(j_d(flat_list[i])) == flat_out[i]
+
+
+class Test_select_query:
+    def test_takes_table_columns_filters_uses_idf_and_lit_as_needed(self):
+        test_table = "banana"
+        test_columns = "id 7"
+        test_filters = "id 6 = 3"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7" FROM banana WHERE "id 6" = '3';"""
+        assert out == expected
+
+    def test_takes_multiple_columns_filters_as_comma_separated_strings(self):
+        test_table = "banana"
+        test_columns = "id 7, name"
+        test_filters = "id 6 = 3, name = harry"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7", name FROM banana WHERE "id 6" = '3' AND"""
+        expected += """ name = 'harry';"""
+        assert out == expected
+
+    def test_update_ignores_spacing_in_comma_separated_strings(self):
+        test_table = "banana"
+        test_columns = "id 7 ,  name "
+        test_filters = "id 6   =  3,    name  = harry"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7", name FROM banana WHERE "id 6" = '3' AND"""
+        expected += """ name = 'harry';"""
+        assert out == expected
+
+    def test_takes_multiple_columns_as_lists(self):
+        test_table = "banana"
+        test_columns = ["id 7", "name"]
+        test_filters = "id 6 = 3, name = harry"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7", name FROM banana WHERE "id 6" = '3' AND"""
+        expected += """ name = 'harry';"""
+        assert out == expected
+
+    def test_takes_multiple_filters_as_list_of_len2_sublists(self):
+        test_table = "banana"
+        test_columns = "id 7, name"
+        test_filters = [["id 6", "3"], ["name", "harry"]]
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7", name FROM banana WHERE "id 6" = '3' AND"""
+        expected += """ name = 'harry';"""
+        assert out == expected
+
+    def test_takes_multiple_filters_as_dicts(self):
+        test_table = "banana"
+        test_columns = "id 7, name"
+        test_filters = {"id 6": "3", "name": "harry"}
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT "id 7", name FROM banana WHERE "id 6" = '3' AND"""
+        expected += """ name = 'harry';"""
+        assert out == expected
+
+    def test_has_star_option_for_columns(self):
+        test_table = "banana"
+        test_columns = "*"
+        test_filters = "id 6 = 3"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT * FROM banana WHERE "id 6" = '3';"""
+        assert out == expected
+
+    def test_has_star_option_for_columns_works_as_list(self):
+        test_table = "banana"
+        test_columns = ["*"]
+        test_filters = "id 6 = 3"
+        out = select_query(test_table, test_columns, test_filters)
+        expected = """SELECT * FROM banana WHERE "id 6" = '3';"""
+        assert out == expected
 
 
 class Test_insert_query:

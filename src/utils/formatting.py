@@ -2,14 +2,6 @@ from pg8000.native import identifier, literal
 import json
 
 
-def warn(arg):
-    print("\033[93m" + arg + "\033[0m")
-
-
-def err(arg):
-    print("\033[91m" + arg + "\033[0m")
-
-
 def j_d(item):
     ''' Takes an item and returns the json.dumps string version if a dict,
         otherwise does nothing.
@@ -42,6 +34,51 @@ def lit(data):
         return [lit(item) for item in data]
     else:
         return literal(j_d(data))
+
+
+def select_query(table, columns, filters):
+    ''' Constructs a select query using the table name, columns to select and
+        filters. SQL injection protection is performed in the function so it
+        doesn't need to be done before passing to the function.
+
+        Args:
+            table:
+                The name of the table to select data from.
+            columns:
+                A list of column headings to return.
+            filters:
+                The filters used to determine which rows to select. Can also
+                be passed as a dict.
+
+        Returns:
+            query:
+                The constructed query string.
+    '''
+    # Convert columns into an SQL injection protected comma separated string
+    # whether it was passed as a string or a list
+    if columns == ["*"]:
+        columns = "*"
+    if columns != "*":
+        if isinstance(columns, str):
+            columns = [item.strip() for item in columns.split(",")]
+        columns = ", ".join(idf(columns))
+
+    # If filters is a string then split and clean so passed spacing isn't an
+    # issue
+    if isinstance(filters, str):
+        filters = [item.split("=") for item in filters.split(",")]
+        filters = [[string.strip() for string in item] for item in filters]
+    # If filters is a dict then make each K-V pair a two item sublist
+    elif isinstance(filters, dict):
+        filters = [[key, filters[key]] for key in filters]
+
+    # Join filters lists into string, using the idf and lit functions to
+    # prevent SQL injection and j_d to convert any dicts to json strings
+    filters = [idf(item[0])+" = "+lit(item[1]) for item in filters]
+    filters = " AND ".join(filters)
+    # Construct the query string
+    query_str = f"SELECT {columns} FROM {idf(table)} WHERE {filters};"
+    return query_str
 
 
 def insert_query(table, headings, data, returns=None):
@@ -133,7 +170,7 @@ def update_query(table, changes, filters, returns=None):
     changes = [idf(item[0])+" = "+lit(item[1]) for item in changes]
     changes = ", ".join(changes)
 
-    # If changes is a string then split and clean so passed spacing isn't an
+    # If filters is a string then split and clean so passed spacing isn't an
     # issue
     if isinstance(filters, str):
         filters = [item.split("=") for item in filters.split(",")]
