@@ -9,14 +9,14 @@ class Debug:
         if self.enabled:
             for item in args:
                 pprint(item, **kwargs)
-    
-    def warn(self, arg):
-        if self.enabled:
-            print("\033[93m" + arg + "\033[0m")
 
-    def err(self, arg):
+    def warn(self, *args):
         if self.enabled:
-            print("\033[91m" + arg + "\033[0m")
+            self.__call__(["\033[93m" + str(arg) + "\033[0m" for arg in args])
+
+    def err(self, *args):
+        if self.enabled:
+            self.__call__(["\033[91m" + str(arg) + "\033[0m" for arg in args])
 
     def on(self):
         self.enabled = True
