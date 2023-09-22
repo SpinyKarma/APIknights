@@ -1,9 +1,10 @@
 from src.utils.insert import (
     merge,
-    insert_archetype
+    diff,
+    insert_archetype,
+    insert_module
 )
-from src.utils.formatting import select_query, insert_query, update_query
-from src.utils.connect import run
+from src.utils.formatting import insert_query, update_query
 from unittest.mock import Mock, patch, ANY
 from copy import deepcopy
 
@@ -47,67 +48,60 @@ class Test_merge:
         }
 
 
+class Test_diff:
+    def test_returns_empty_dict_when_args_are_same(self):
+        assert diff({"one": "two"}, {"one": "two"}) == {}
+
+    def test_returns_after_dict_when_no_key_overlap(self):
+        assert diff({"one": "two"}, {"three": "four"}) == {"three": "four"}
+
+    def test_returns_differing_keys_when_key_overlap(self):
+        assert diff({"one": "two"}, {"one": "five"}) == {"one": "five"}
+
+    def test_ignores_KV_pairs_that_are_same_in_each_dict(self):
+        assert diff(
+            {"one": "two", "three": "four"},
+            {"one": "five", "three": "four"}
+        ) == {"one": "five"}
+
+
 class Test_insert_archetype:
-    fake = {"archetype_name": "banana"}
-    headings = list(fake.keys())
-    data = list(fake.values())
-
-    @patch("src.utils.insert.connect")
     @patch("src.utils.insert.run")
-    def test_does_not_mutate_passed_dict(self, mock_run, mock_connect):
-        fake_clone = deepcopy(self.fake)
-        mock_run.side_effect = [
-            [{"archetype_id": 17, "archetype_name": "banana"}]
-        ]
-        insert_archetype(self.fake)
-        assert fake_clone == self.fake
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
+        stored = []
+        fresh = {"apple": "orange"}
+        query = insert_query("archetypes", fresh, ["archetype_id"])
+        insert_archetype(stored, fresh)
+        m_run.assert_called_with(query)
 
-    @patch("src.utils.insert.connect")
     @patch("src.utils.insert.run")
-    # connect patched to stop test's attempts to connect, not neded for testing
-    def test_queries_db_using_archetype_name_of_arg(
-        self, mock_run, mock_connect
-    ):
-        mock_run.side_effect = [
-            [{"archetype_id": 1, "archetype_name": "banana"}]
-        ]
-        insert_archetype(self.fake)
-        cond = {"archetype_name": self.fake["archetype_name"]}
-        query = select_query("archetypes", "*", cond)
-        mock_run.assert_called_with(ANY, query)
+    def test_returns_id_from_query_if_stored_is_empty(self, m_run):
+        stored = []
+        fresh = {"apple": "orange"}
+        m_run.return_value = [{"archetype_id": 15}]
+        a_id = insert_archetype(stored, fresh)
+        assert a_id == 15
 
-    @patch("src.utils.insert.connect")
-    @patch("src.utils.insert.run")
-    def test_returns_archetype_id_of_res_if_not_empty(
-        self, mock_run, mock_connect
-    ):
-        mock_run.side_effect = [
-            [{"archetype_id": 17, "archetype_name": "banana"}]
-        ]
-        id = insert_archetype(self.fake)
-        assert id == 17
+    @patch("src.utils.insert.merge")
+    def test_calls_merge_on_both_args_stored_not_empty(self, m_merge):
+        stored = [{"archetype_id": 15, "lemon": "pear"}]
+        fresh = {"apple": "orange"}
+        m_merge.return_value = stored[0]
+        insert_archetype(stored, fresh)
+        m_merge.assert_called_with(stored[0], fresh, "vb")
 
-    @patch("src.utils.insert.connect")
-    @patch("src.utils.insert.run")
-    def test_runs_insert_query_with_passed_info_if_res_empty(
-        self, mock_run, mock_connect
-    ):
-        mock_run.side_effect = [[], [{"archetype_id": 95}]]
-        id = insert_archetype(self.fake)
-        query = insert_query(
-            "archetypes", self.headings, self.data, "archetype_id"
-        )
-        mock_run.assert_called_with(ANY, query)
-        assert id == 95
+    def test_if_merge_equal_to_stored_return_id_from_stored(self):
+        stored = [{"archetype_id": 15, "apple": "orange"}]
+        fresh = {"apple": "orange"}
+        a_id = insert_archetype(stored, fresh)
+        assert a_id == 15
 
-    @patch("src.utils.insert.connect")
     @patch("src.utils.insert.run")
-    def test_runs_update_query_if_needed_res_not_empty(
-        self, mock_run, mock_connect
-    ):
-        mock_run.side_effect = [[{"archetype_id": 17}], []]
-        insert_archetype(self.fake)
-        query = update_query(
-            "archetypes", {"archetype_name": "banana"}, {"archetype_id": 17}
-        )
-        mock_run.assert_called_with(ANY, query)
+    def test_runs_update_query_if_merged_not_stored(self, m_run):
+        stored = [{"archetype_id": 15, "lemon": "pear"}]
+        fresh = {"apple": "orange"}
+        merged = merge(stored[0], fresh)
+        changes = diff(stored[0], merged)
+        query = update_query("archetypes", changes, {"archetype_id": 15})
+        insert_archetype(stored, fresh)
+        m_run.assert_called_with(query)

@@ -11,7 +11,7 @@ from src.utils.formatting import (
 from src.utils.debugger import Debug
 
 log = Debug()
-log.on()
+log.off()
 
 
 def merge(old, new):
@@ -54,55 +54,32 @@ def merge(old, new):
     return merged
 
 
-def insert_archetype(archetype_info):
-    ''' Take the archetype_info dict, compare it to the stored version, insert
-        if not found. If found update if necessary, do nothing if not. Return
-        the archetype_id from the stored version either from the query or after
-        inserting.
-    '''
-    # Copy the dict to avoid mutation
-    a_info = deepcopy(archetype_info)
-    log("recieved info was ", a_info)
-    # Extract the name for easy access
-    a_name = a_info["archetype_name"]
-    query = select_query("archetypes", "*", {"archetype_name": a_name})
-    log("first query was", query)
-    # Check for the stored version using the name to filter
-    with connect() as db:
-        stored = run(db, query)
-    log("first response was", stored)
-    # If found then extract the archetype_id
-    if stored != []:
-        log("something in storage")
+def diff(before, after):
+    log(before, after)
+    changes = {
+        key: after[key] for key in after if after[key] != before.get(key)
+    }
+    return changes
+
+
+def insert_archetype(stored, fresh):
+    if stored == []:
+        query = insert_query("archetypes", fresh, ["archetype_id"])
+        res = run(query)[0]
+        a_id = res["archetype_id"]
+    else:
         stored = stored[0]
         a_id = stored["archetype_id"]
-        log("stored id was", a_id)
-        # Compare the stored version with the current version
-        updated = merge(stored, a_info)
-        changes = {
-            key: updated[key]
-            for key in updated if updated[key] != stored.get(key)
-        }
-        # If any values need updating then run an update query
+        log("calling merge")
+        merged = merge(stored, fresh)
+        log("merged = ", merged)
+        changes = diff(stored, merged)
+        log("changes = ", changes)
         if changes != {}:
-            log("changes need making")
             query = update_query("archetypes", changes, {"archetype_id": a_id})
-            log("second query was", query)
-            with connect() as db:
-                run(db, query)
-            log("second response query was successful")
-    # If not found then insert and return the assigned archetype_id
-    else:
-        log("nothing in storage")
-        headings = [key for key in a_info]
-        data = [a_info[key] for key in a_info]
-        query = insert_query("archetypes", headings, data, "archetype_id")
-        log("second query was", query)
-        with connect() as db:
-            res = run(db, query)[0]
-        log("second response was", res)
-        a_id = res["archetype_id"]
-    # Return the archetype_id
+            log("query = ", query)
+            run(query)
+            log("query has been run")
     return a_id
 
 
