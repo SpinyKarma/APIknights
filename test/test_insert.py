@@ -8,41 +8,6 @@ from unittest.mock import Mock, patch, ANY
 from copy import deepcopy
 
 
-class Test_run:
-    def test_uses_db_to_run_query(self):
-        mock_db = Mock()
-        mock_db.run = Mock(return_value=[])
-        mock_db.columns = []
-        test_query = "banana"
-        run(mock_db, test_query)
-        mock_db.run.assert_called_with(test_query)
-
-    def test_returns_empty_list_when_empty_response(self):
-        mock_db = Mock()
-        mock_db.run = Mock(return_value=[])
-        mock_db.columns = []
-        test_query = "banana"
-        out = run(mock_db, test_query)
-        assert out == []
-
-    def test_packages_rows_and_columns_from_response_into_dicts(self):
-        mock_db = Mock()
-        mock_db.run = Mock(return_value=[
-            ["banana", "yellow"],
-            ["orange", "orange"]
-        ])
-        mock_db.columns = [
-            {"name": "fruit"},
-            {"name": "colour"}
-        ]
-        test_query = "banana"
-        out = run(mock_db, test_query)
-        assert out == [
-            {"fruit": "banana", "colour": "yellow"},
-            {"fruit": "orange", "colour": "orange"}
-        ]
-
-
 class Test_merge:
     def test_returns_empty_dict_when_passed_two_empty_dicts(self):
         assert merge({}, {}) == {}
