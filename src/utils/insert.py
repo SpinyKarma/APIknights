@@ -1,7 +1,7 @@
 from pg8000.exceptions import DatabaseError
 from copy import deepcopy
 from src.utils.connect import connect, run
-from src.utils.scraper import scrape
+# from src.utils.scraper import scrape
 from src.utils.formatting import (
     select_query,
     insert_query,
@@ -64,7 +64,7 @@ def diff(before, after):
 
 def insert_archetype(stored, fresh):
     if stored == []:
-        query = insert_query("archetypes", fresh, ["archetype_id"])
+        query = insert_query("archetypes", fresh, "archetype_id")
         res = run(query)[0]
         a_id = res["archetype_id"]
     else:
@@ -83,133 +83,67 @@ def insert_archetype(stored, fresh):
     return a_id
 
 
-def insert_module(module_info):
-    ''' Take a module_info dict, query the stored version, insert if not found.
-        If found skip. Return the module_id from the stored version either
-        from the query or after inserting.
-    '''
-    # Copy the dict to avoid mutation
-    m_info = deepcopy(module_info)
-    # Extract the name for easy access
-    m_name = m_info["module_name"]
-
-    with connect() as db:
-        # Check for the stored version using the name to filter
-        query = f"SELECT * FROM modules WHERE module_name = {lit(m_name)};"
-        stored = run(db, query)
-        # If not found then insert and return the assigned module_id
-        if stored == []:
-            headings = [key for key in m_info]
-            data = [m_info[key] for key in m_info]
-            log(data)
-            query = insert_query("modules", headings, data, ["module_id"])
-            log(query)
-            m_id = run(db, query)[0]["module_id"]
-        # If found then extract the module_id
-        else:
-            stored = stored[0]
-            log(f"module {m_name} already in db, skipping")
-            m_id = stored["module_id"]
-        log(m_info)
-        return m_id
+def insert_module(stored, fresh):
+    if stored == []:
+        query = insert_query("modules", fresh, "module_id")
+        res = run(query)[0]
+        m_id = res["module_id"]
+    else:
+        stored = stored[0]
+        m_id = stored["module_id"]
+    return m_id
 
 
-def insert_skill(skill_info):
-    ''' Take a skill_info dict, query the stored version, insert if not found.
-        If found skip. Return the skill_id from the stored version either
-        from the query or after inserting.
-    '''
-    # Copy the dict to avoid mutation
-    s_info = deepcopy(skill_info)
-    # Extract the name for easy access
-    s_name = s_info["skill_name"]
-    with connect() as db:
-        # Check for the stored version using the name to filter
-        query = f"SELECT * FROM skills WHERE skill_name = {lit(s_name)};"
-        stored = run(db, query)
-        # If not found then insert and return the assigned skill_id
-        if stored == []:
-            headings = [key for key in s_info]
-            data = [s_info[key] for key in s_info]
-            log(data)
-            query = insert_query("skills", headings, data, ["skill_id"])
-            log(query)
-            s_id = run(db, query)[0]["skill_id"]
-        # If found then extract the skill_id
-        else:
-            stored = stored[0]
-            log(f"skill {s_name} already in db, skipping")
-            s_id = stored["skill_id"]
-        log(s_info)
-        return s_id
+def insert_skill(stored, fresh):
+    if stored == []:
+        query = insert_query("skills", fresh, "skill_id")
+        res = run(query)[0]
+        s_id = res["skill_id"]
+    else:
+        stored = stored[0]
+        s_id = stored["skill_id"]
+    return s_id
 
 
-def insert_operator(operator_info, archetype_id, module_ids, skill_ids):
-    ''' Take the operator_info dict, query the stored version, insert if not
-        found. If operator has an alter and that alter is in the database,
-        modify both to reflect that, if alter not found then make None.
-        If operator found in db then skip. Return the operator_id from the
-        stored version either from the query or after inserting.
-    '''
-    # Copy the dict to avoid mutation
-    o_info = deepcopy(operator_info)
-    # Extract the name for easy access
-    o_name = o_info["operator_name"]
-    with connect() as db:
-        # Check for the stored version using the name to filter
-        query = "SELECT * FROM operators WHERE "
-        query += f"operator_name = {lit(o_name)};"
-        stored = run(db, query)
-        # If not found then insert and return the assigned operator_id
-        if stored == []:
-            alter_update = False
-            log(archetype_id, module_ids, skill_ids)
-            # Assign all the relevant ids to the operator before insertion
-            o_info["archetype_id"] = archetype_id
-            for i in range(len(module_ids)):
-                o_info[f"module_{i+1}_id"] = module_ids[i][0]
-            for i in range(len(skill_ids)):
-                o_info[f"skill_{i+1}_id"] = skill_ids[i][0]
-            alter = o_info.get("alter")
-            # If the operator has a listed alter, query the db to find them
-            if alter:
-                query = "SELECT operator_id FROM operators "
-                query += f"WHERE operator_name = {lit(alter)};"
-                stored_alter = run(
-                    db,
-                )
-                # If the alter isn't found then set alter to None on the op
-                if stored_alter == []:
-                    o_info["alter"] = None
-                # Else take the alter's operator_id and flip a bool so the
-                # alter's alter can be modified later to match
-                else:
-                    o_info["alter"] = stored_alter[0]["operator_id"]
-                    alter_update = True
-            # Insert the operator_info psot modification, returning the
-            # assigned id
-            headings = [key for key in o_info]
-            data = [o_info[key] for key in o_info]
-            log(headings)
-            log("")
-            log(data)
-            query = insert_query("operators", headings, data, ["operator_id"])
-            o_id = run(db, query)[0]["operator_id"]
-            # If the bool was flipped earlier, then the alter needs it's alter
-            # to reflect this operator now being in the db
-            if alter_update:
-                query = update_query(
-                    "operators",
-                    {"alter": o_id},
-                    {"operator_id": o_info["alter"]}
-                )
-                run(db, query)
-        # If found then extract the operator_id
-        else:
-            stored = stored[0]
-            log(f"operator {o_name} already in db, skipping")
-            o_id = stored["operator_id"]
-        return o_id
+def add_ids_to_op(fresh, a_id: int, m_ids: list, s_ids: list):
+    id_fresh = deepcopy(fresh)
+    id_fresh["archetype_id"] = a_id
+    for i in range(len(m_ids)):
+        id_fresh[f"module_{i+1}_id"] = m_ids[i]
+    for i in range(len(s_ids)):
+        id_fresh[f"skill_{i+1}_id"] = s_ids[i]
+    if id_fresh.get("alter"):
+        del id_fresh["alter"]
+    return id_fresh
+
+
+def insert_operator(stored, id_fresh):
+    if stored == []:
+        query = insert_query("operators", id_fresh, "operator_id")
+        res = run(query)[0]
+        o_id = res["operator_id"]
+    else:
+        stored = stored[0]
+        o_id = stored["operator_id"]
+    return o_id
+
+
+def alter_mod(alter_name, o_id):
+    if alter_name:
+        query = select_query(
+            "operators", "operator_id", {"operator_name": alter_name}
+        )
+        res = run(query)
+        if res != []:
+            alter_id = res[0]["operator_id"]
+            op_query = update_query(
+                "operators", {"alter": alter_id}, {"operator_id": o_id}
+            )
+            alt_query = update_query(
+                "operators", {"alter": o_id}, {"operator_id": alter_id}
+            )
+            run(op_query)
+            run(alt_query)
 
 
 def insert_tags(tag_info):
