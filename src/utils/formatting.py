@@ -41,9 +41,14 @@ def lit(data):
         return literal(j_d(data))
 
 
-def select_query(table, cols=["*"], filters={}):
+def select_query(table, cols="*", filters={}):
     table = idf(table)
-    cols = ", ".join(idf(cols))
+    if isinstance(cols, str):
+        if cols.split(", ")[0] != cols:
+            cols = cols.split(", ")
+    cols = idf(cols)
+    if isinstance(cols, list):
+        cols = ", ".join(cols)
     query = f"SELECT {cols} FROM {table}"
     filters = " AND ".join(
         [idf(key)+" = "+lit(filters[key]) for key in filters]
@@ -70,7 +75,12 @@ def insert_query(table, row_dicts, returns=None):
     data += ")"
     query = f"INSERT INTO {table} {cols} VALUES {data}"
     if returns:
-        returns = ", ".join(idf(returns))
+        if isinstance(returns, str):
+            if returns.split(", ")[0] != returns:
+                returns = returns.split(", ")
+        returns = idf(returns)
+        if isinstance(returns, list):
+            returns = ", ".join(returns)
         query += f" RETURNING {returns}"
     query += ";"
     return query
@@ -86,7 +96,12 @@ def update_query(table, changes, filters={}, returns=None):
     if filters:
         query += f" WHERE {filters}"
     if returns:
-        returns = ", ".join(idf(returns))
+        if isinstance(returns, str):
+            if returns.split(", ")[0] != returns:
+                returns = returns.split(", ")
+        returns = idf(returns)
+        if isinstance(returns, list):
+            returns = ", ".join(returns)
         query += f" RETURNING {returns}"
     query += ";"
     return query

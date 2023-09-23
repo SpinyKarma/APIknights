@@ -105,19 +105,27 @@ class Test_select_query:
         query = select_query("banana", ["apple 2", "orange 3"])
         assert query == 'SELECT "apple 2", "orange 3" FROM banana;'
 
+    def test_one_col_can_be_passed_as_str(self):
+        query = select_query("banana", "apple 2")
+        assert query == 'SELECT "apple 2" FROM banana;'
+
+    def test_multiple_cols_can_be_passed_as_comma_separated_string(self):
+        query = select_query("banana", "apple 2, orange 3")
+        assert query == 'SELECT "apple 2", "orange 3" FROM banana;'
+
     def test_parses_dict_of_filters_to_apply(self):
-        query = select_query("banana", ["*"], {"lemon": "lime"})
+        query = select_query("banana", "*", {"lemon": "lime"})
         assert query == "SELECT * FROM banana WHERE lemon = 'lime';"
 
     def test_correctly_separates_multiple_filters(self):
         query = select_query(
-            "banana", ["*"], {"lemon": "lime", "pear": "coconut"})
+            "banana", "*", {"lemon": "lime", "pear": "coconut"})
         expected = "SELECT * FROM banana WHERE lemon = 'lime'"
         expected += " AND pear = 'coconut';"
         assert query == expected
 
     def test_applies_idf_and_lit_to_each_filter_pair(self):
-        query = select_query("banana", ["*"], {"apple 2": "orange 3"})
+        query = select_query("banana", "*", {"apple 2": "orange 3"})
         expected = 'SELECT * FROM banana WHERE "apple 2" '
         expected += "= 'orange 3';"
         assert query == expected
@@ -173,6 +181,21 @@ class Test_insert_query:
         query = insert_query("banana", [{"lemon": "lime"}], ["apple 1"])
         expected = "INSERT INTO banana (lemon) VALUES ('lime')"
         expected += ' RETURNING "apple 1";'
+        assert query == expected
+
+    def test_one_return_can_be_passed_as_str(self):
+        query = insert_query("banana", [{"lemon": "lime"}], "apple 1")
+        expected = "INSERT INTO banana (lemon) VALUES ('lime')"
+        expected += ' RETURNING "apple 1";'
+        assert query == expected
+
+    def test_multiple_returns_can_be_passed_as_comma_separated_string(self):
+        query = insert_query(
+            "banana",
+            [{"lemon": "lime"}],
+            "apple 1, peach 2")
+        expected = "INSERT INTO banana (lemon) VALUES ('lime')"
+        expected += ' RETURNING "apple 1", "peach 2";'
         assert query == expected
 
 
@@ -236,4 +259,24 @@ class Test_update_query:
             ["peach 1"])
         expected = "UPDATE banana SET lemon = 'lime' WHERE apple = 'pear'"
         expected += ' RETURNING "peach 1";'
+        assert query == expected
+
+    def test_one_return_can_be_passed_as_str(self):
+        query = update_query(
+            "banana",
+            {"lemon": "lime"},
+            {"apple": "pear"},
+            "peach 1")
+        expected = "UPDATE banana SET lemon = 'lime' WHERE apple = 'pear'"
+        expected += ' RETURNING "peach 1";'
+        assert query == expected
+
+    def test_multiple_returns_can_be_passed_as_comma_separated_string(self):
+        query = update_query(
+            "banana",
+            {"lemon": "lime"},
+            {"apple": "pear"},
+            "peach 1, pineapple 2")
+        expected = "UPDATE banana SET lemon = 'lime' WHERE apple = 'pear'"
+        expected += ' RETURNING "peach 1", "pineapple 2";'
         assert query == expected
