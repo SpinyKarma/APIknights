@@ -55,6 +55,12 @@ class Test_idf:
         test_str = "*"
         assert idf(test_str) == test_str
 
+    def test_doesnt_apply_extra_quotes_to_already_validated_str(self):
+        test_str = "banana 2"
+        valid_str = idf(test_str)
+        double_valid_str = idf(valid_str)
+        assert double_valid_str == valid_str
+
 
 class Test_lit:
     def test_lit_applies_literal_to_single_string(self):
@@ -82,6 +88,12 @@ class Test_lit:
         flat_out = [item for sublist in out for item in sublist]
         for i in range(len(flat_list)):
             assert literal(j_d(flat_list[i])) == flat_out[i]
+
+    def test_doesnt_apply_extra_quotes_to_already_validated_str(self):
+        test_str = "banana"
+        valid_str = lit(test_str)
+        double_valid_str = lit(valid_str)
+        assert double_valid_str == valid_str
 
 
 class Test_select_query:

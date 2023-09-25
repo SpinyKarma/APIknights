@@ -23,7 +23,7 @@ def idf(data):
     '''
     if isinstance(data, list):
         return [idf(item) for item in data]
-    elif data == "*":
+    elif data == "*" or (data[0] == '"' and data[-1] == '"'):
         return data
     else:
         return identifier(data)
@@ -37,6 +37,8 @@ def lit(data):
     '''
     if isinstance(data, list):
         return [lit(item) for item in data]
+    elif isinstance(data, str) and data[0] == "'" and data[-1] == "'":
+        return data
     else:
         return literal(j_d(data))
 
