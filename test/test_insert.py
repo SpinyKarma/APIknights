@@ -7,7 +7,8 @@ from src.utils.insert import (
     alter_mod,
     add_ids_to_op,
     insert_operator,
-    insert_tags
+    insert_tags,
+    insert_operators_tags
 )
 from unittest.mock import patch, call
 from copy import deepcopy
@@ -374,9 +375,10 @@ class Test_insert_tags:
     def test_makes_insert_query_for_each_new_tag(self, m_query, m_run):
         stored = {"banana": 1}
         fresh = ["lemon", "apple", "banana"]
+        m_query.side_effect = ["one", "two"]
         insert_tags(stored, fresh)
         assert m_query.call_count == 2
-        assert m_run.call_count == 2
+        assert m_run.call_args_list == [call("one"), call("two")]
 
     @patch("src.utils.insert.run")
     def test_appends_returned_tag_id_for_each_new_tag(self, m_run):
@@ -393,3 +395,35 @@ class Test_insert_tags:
         m_run.side_effect = [[{"tag_id": 7}], [{"tag_id": 5}], [{"tag_id": 3}]]
         tag_ids = insert_tags(stored, fresh)
         assert tag_ids == [7, 5, 1, 3]
+
+
+class Test_insert_operators_tags:
+    @patch("src.utils.insert.run")
+    def test_does_nothing_if_all_tag_ids_in_stored(self, m_run):
+        stored_tag_ids = [1, 2, 3]
+        op_id = 16
+        tag_ids = [2, 3]
+        insert_operators_tags(stored_tag_ids, op_id, tag_ids)
+        m_run.assert_not_called()
+
+    @patch("src.utils.insert.run")
+    @patch("src.utils.insert.insert_query")
+    def test_makes_insert_query_for_each_new_tag(self, m_query, m_run):
+        stored_tag_ids = [1, 2, 3]
+        op_id = 16
+        tag_ids = [4, 5]
+        m_query.side_effect = ["one", "two"]
+        insert_operators_tags(stored_tag_ids, op_id, tag_ids)
+        assert m_query.call_count == 2
+        assert m_run.call_args_list == [call("one"), call("two")]
+
+    @patch("src.utils.insert.run")
+    @patch("src.utils.insert.insert_query")
+    def test_makes_insert_query_for_only_new_tags(self, m_query, m_run):
+        stored_tag_ids = [1, 2, 3]
+        op_id = 16
+        tag_ids = [1, 2, 3, 4, 5]
+        m_query.side_effect = ["one", "two"]
+        insert_operators_tags(stored_tag_ids, op_id, tag_ids)
+        assert m_query.call_count == 2
+        assert m_run.call_args_list == [call("one"), call("two")]

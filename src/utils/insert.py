@@ -62,18 +62,18 @@ def diff(before, after):
     return changes
 
 
-def insert_archetype(stored, fresh):
-    if stored == []:
-        query = insert_query("archetypes", fresh, "archetype_id")
+def insert_archetype(stored_arch_info, fresh_arch_info):
+    if stored_arch_info == []:
+        query = insert_query("archetypes", fresh_arch_info, "archetype_id")
         res = run(query)[0]
         a_id = res["archetype_id"]
     else:
-        stored = stored[0]
-        a_id = stored["archetype_id"]
+        stored_arch_info = stored_arch_info[0]
+        a_id = stored_arch_info["archetype_id"]
         log("calling merge")
-        merged = merge(stored, fresh)
+        merged = merge(stored_arch_info, fresh_arch_info)
         log("merged = ", merged)
-        changes = diff(stored, merged)
+        changes = diff(stored_arch_info, merged)
         log("changes = ", changes)
         if changes != {}:
             query = update_query("archetypes", changes, {"archetype_id": a_id})
@@ -83,48 +83,48 @@ def insert_archetype(stored, fresh):
     return a_id
 
 
-def insert_module(stored, fresh):
-    if stored == []:
-        query = insert_query("modules", fresh, "module_id")
+def insert_module(stored_mod_info, fresh_mod_info):
+    if stored_mod_info == []:
+        query = insert_query("modules", fresh_mod_info, "module_id")
         res = run(query)[0]
         m_id = res["module_id"]
     else:
-        stored = stored[0]
-        m_id = stored["module_id"]
+        stored_mod_info = stored_mod_info[0]
+        m_id = stored_mod_info["module_id"]
     return m_id
 
 
-def insert_skill(stored, fresh):
-    if stored == []:
-        query = insert_query("skills", fresh, "skill_id")
+def insert_skill(stored_skill_info, fresh_skill_info):
+    if stored_skill_info == []:
+        query = insert_query("skills", fresh_skill_info, "skill_id")
         res = run(query)[0]
         s_id = res["skill_id"]
     else:
-        stored = stored[0]
-        s_id = stored["skill_id"]
+        stored_skill_info = stored_skill_info[0]
+        s_id = stored_skill_info["skill_id"]
     return s_id
 
 
-def add_ids_to_op(fresh, a_id: int, m_ids: list, s_ids: list):
-    id_fresh = deepcopy(fresh)
-    id_fresh["archetype_id"] = a_id
+def add_ids_to_op(fresh_op_info, a_id: int, m_ids: list, s_ids: list):
+    id_fresh_op_info = deepcopy(fresh_op_info)
+    id_fresh_op_info["archetype_id"] = a_id
     for i in range(len(m_ids)):
-        id_fresh[f"module_{i+1}_id"] = m_ids[i]
+        id_fresh_op_info[f"module_{i+1}_id"] = m_ids[i]
     for i in range(len(s_ids)):
-        id_fresh[f"skill_{i+1}_id"] = s_ids[i]
-    if id_fresh.get("alter"):
-        del id_fresh["alter"]
-    return id_fresh
+        id_fresh_op_info[f"skill_{i+1}_id"] = s_ids[i]
+    if id_fresh_op_info.get("alter"):
+        del id_fresh_op_info["alter"]
+    return id_fresh_op_info
 
 
-def insert_operator(stored, id_fresh):
-    if stored == []:
-        query = insert_query("operators", id_fresh, "operator_id")
+def insert_operator(stored_op_info, id_fresh_op_info):
+    if stored_op_info == []:
+        query = insert_query("operators", id_fresh_op_info, "operator_id")
         res = run(query)[0]
         o_id = res["operator_id"]
     else:
-        stored = stored[0]
-        o_id = stored["operator_id"]
+        stored_op_info = stored_op_info[0]
+        o_id = stored_op_info["operator_id"]
     return o_id
 
 
@@ -146,9 +146,9 @@ def alter_mod(alter_name, o_id):
             run(alt_query)
 
 
-def insert_tags(stored_tag_ids, fresh):
+def insert_tags(stored_tag_ids, fresh_tags):
     tag_ids = []
-    for tag in fresh:
+    for tag in fresh_tags:
         if tag not in stored_tag_ids:
             query = insert_query("tags", {"tag_name": tag}, "tag_id")
             res = run(query)[0]
@@ -158,18 +158,13 @@ def insert_tags(stored_tag_ids, fresh):
     return tag_ids
 
 
-def insert_operators_tags(o_id, tag_ids):
-    with connect() as db:
-        query = "SELECT tag_id FROM operators_tags WHERE "
-        query += f"operator_id = {lit(o_id)};"
-        stored = run(db, query)
-        stored = [item[0] for item in stored]
-        for tag in tag_ids:
-            if tag not in stored:
-                query = insert_query(
-                    "operators_tags", ["operator_id", "tag_id"], [o_id, tag]
-                )
-                run(db, query)
+def insert_operators_tags(stored_op_tag_ids, op_id, tag_ids):
+    new_tags = [tag for tag in tag_ids if tag not in stored_op_tag_ids]
+    for tag in new_tags:
+        query = insert_query(
+            "operators_tags", {"tag_id": tag, "operator_id": op_id}
+        )
+        run(query)
 
 
 def insert(operator_info, archetype_info, skill_info, tag_info, module_info):
