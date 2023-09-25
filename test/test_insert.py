@@ -8,10 +8,13 @@ from src.utils.insert import (
     add_ids_to_op,
     insert_operator,
     insert_tags,
-    insert_operators_tags
+    insert_operators_tags,
+    insert
 )
 from unittest.mock import patch, call
 from copy import deepcopy
+from pg8000.exceptions import DatabaseError
+import pytest
 
 
 class Test_merge:
@@ -413,3 +416,15 @@ class Test_insert_operators_tags:
         query_2 += "VALUES (5, 16);"
         insert_operators_tags(stored_tag_ids, op_id, tag_ids)
         assert m_run.call_args_list == [call(query_1), call(query_2)]
+
+
+class Test_insert:
+    @patch("src.utils.insert.connect")
+    @patch("src.utils.insert.log.warn")
+    def test_gives_warning_message_if_db_doesnt_exist(self, m_warn, m_connect):
+        m_connect.side_effect = DatabaseError
+        with pytest.raises(DatabaseError):
+            insert(1, 2, 3, 4, 5)
+        m_warn.assert_called_with(
+            "Database doesn't exist yet, run 'seed-db.sh' to initialise."
+        )
