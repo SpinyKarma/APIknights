@@ -6,7 +6,8 @@ from src.utils.insert import (
     insert_skill,
     alter_mod,
     add_ids_to_op,
-    insert_operator
+    insert_operator,
+    insert_tags
 )
 from unittest.mock import patch, call
 from copy import deepcopy
@@ -352,3 +353,43 @@ class Test_alter_mod:
         alter_mod("orange", 1)
         assert call("banana") == m_run.call_args_list[1]
         assert call("lemon") == m_run.call_args_list[2]
+
+
+class Test_insert_tags:
+    @patch("src.utils.insert.run")
+    def test_does_not_query_db_if_no_new_tags(self, m_run):
+        stored = {"banana": 1}
+        fresh = ["banana"]
+        insert_tags(stored, fresh)
+        m_run.assert_not_called()
+
+    def test_return_tag_ids_for_tags_in_fresh_if_all_in_stored(self):
+        stored = {"banana": 1}
+        fresh = ["banana"]
+        tag_ids = insert_tags(stored, fresh)
+        assert tag_ids == [1]
+
+    @patch("src.utils.insert.run")
+    @patch("src.utils.insert.insert_query")
+    def test_makes_insert_query_for_each_new_tag(self, m_query, m_run):
+        stored = {"banana": 1}
+        fresh = ["lemon", "apple", "banana"]
+        insert_tags(stored, fresh)
+        assert m_query.call_count == 2
+        assert m_run.call_count == 2
+
+    @patch("src.utils.insert.run")
+    def test_appends_returned_tag_id_for_each_new_tag(self, m_run):
+        stored = {"banana": 1}
+        fresh = ["lemon", "apple"]
+        m_run.side_effect = [[{"tag_id": 7}], [{"tag_id": 5}]]
+        tag_ids = insert_tags(stored, fresh)
+        assert tag_ids == [7, 5]
+
+    @patch("src.utils.insert.run")
+    def test_compiles_both_tag_sources_into_returned_list(self, m_run):
+        stored = {"banana": 1}
+        fresh = ["lemon", "apple", "banana", "lime"]
+        m_run.side_effect = [[{"tag_id": 7}], [{"tag_id": 5}], [{"tag_id": 3}]]
+        tag_ids = insert_tags(stored, fresh)
+        assert tag_ids == [7, 5, 1, 3]

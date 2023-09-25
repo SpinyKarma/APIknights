@@ -146,18 +146,15 @@ def alter_mod(alter_name, o_id):
             run(alt_query)
 
 
-def insert_tags(tag_info):
+def insert_tags(stored_tag_ids, fresh):
     tag_ids = []
-    with connect() as db:
-        stored = run(db, "SELECT * FROM tags;")
-        stored_names = {tag[1]: tag[0] for tag in stored}
-        for tag in tag_info:
-            if tag in stored_names:
-                tag_ids.append(stored_names[tag])
-            else:
-                query = insert_query("tags", "tag_name", tag, ["tag_id"])
-                tag_id = run(db, query)[0]["tag_id"]
-                tag_ids.append(tag_id)
+    for tag in fresh:
+        if tag not in stored_tag_ids:
+            query = insert_query("tags", {"tag_name": tag}, "tag_id")
+            res = run(query)[0]
+            tag_ids.append(res["tag_id"])
+        else:
+            tag_ids.append(stored_tag_ids[tag])
     return tag_ids
 
 
@@ -177,8 +174,7 @@ def insert_operators_tags(o_id, tag_ids):
 
 def insert(operator_info, archetype_info, skill_info, tag_info, module_info):
     try:
-        db = connect()
-        db.close()
+        connect()
     except DatabaseError as e:
         log.warn("Database doesn't exist yet, run 'seed-db.sh' to initialise.")
         raise e
