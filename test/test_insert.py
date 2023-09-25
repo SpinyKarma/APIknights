@@ -72,13 +72,13 @@ class Test_diff:
 
 class Test_insert_archetype:
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_runs_insert_query_if_stored_is_empty(self, m_query, m_run):
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        m_query.return_value = "banana"
+        query = "INSERT INTO archetypes (apple) VALUES ('orange') "
+        query += "RETURNING archetype_id;"
         insert_archetype(stored, fresh)
-        m_run.assert_called_with("banana")
+        m_run.assert_called_with(query)
 
     @patch("src.utils.insert.run")
     def test_returns_a_id_from_query_if_stored_is_empty(self, m_run):
@@ -103,15 +103,15 @@ class Test_insert_archetype:
         assert a_id == 15
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.update_query")
-    def test_runs_update_query_if_merged_not_stored(self, m_query, m_run):
+    def test_runs_update_query_if_merged_not_stored(self, m_run):
         stored = [{"archetype_id": 15, "lemon": "pear"}]
         fresh = {"apple": "orange"}
         merged = merge(stored[0], fresh)
         changes = diff(stored[0], merged)
-        m_query.return_value = "banana"
+        query = "UPDATE archetypes SET apple = 'orange' "
+        query += "WHERE archetype_id = 15;"
         insert_archetype(stored, fresh)
-        m_run.assert_called_with("banana")
+        m_run.assert_called_with(query)
 
     def test_does_not_mutate_the_input_arguments(self):
         stored = [{"archetype_id": 15, "apple": "orange"}]
@@ -125,13 +125,13 @@ class Test_insert_archetype:
 
 class Test_insert_module:
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_runs_insert_query_if_stored_is_empty(self, m_query, m_run):
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        m_query.return_value = "banana"
+        query = "INSERT INTO modules (apple) VALUES ('orange') "
+        query += "RETURNING module_id;"
         insert_module(stored, fresh)
-        m_run.assert_called_with("banana")
+        m_run.assert_called_with(query)
 
     @patch("src.utils.insert.run")
     def test_returns_module_id_from_query_if_stored_is_empty(self, m_run):
@@ -166,13 +166,13 @@ class Test_insert_module:
 
 class Test_insert_skill:
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_runs_insert_query_if_stored_is_empty(self, m_query, m_run):
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        m_query.return_value = "banana"
+        query = "INSERT INTO skills (apple) VALUES ('orange') "
+        query += "RETURNING skill_id;"
         insert_skill(stored, fresh)
-        m_run.assert_called_with("banana")
+        m_run.assert_called_with(query)
 
     @patch("src.utils.insert.run")
     def test_returns_skill_id_from_query_if_stored_is_empty(self, m_run):
@@ -283,13 +283,13 @@ class Test_add_ids_to_op:
 
 class Test_insert_operator:
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_runs_insert_query_if_stored_is_empty(self, m_query, m_run):
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         id_fresh = {"apple": "orange"}
-        m_query.return_value = "banana"
+        query = "INSERT INTO operators (apple) VALUES ('orange') "
+        query += "RETURNING operator_id;"
         insert_operator(stored, id_fresh)
-        m_run.assert_called_with("banana")
+        m_run.assert_called_with(query)
 
     @patch("src.utils.insert.run")
     def test_returns_op_id_from_query_if_stored_is_empty(self, m_run):
@@ -329,31 +329,26 @@ class Test_alter_mod:
         m_run.assert_not_called()
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.select_query")
-    def test_if_alter_not_None_query_db_for_alters_op_id(self, m_query, m_run):
-        m_query.return_value = "apple"
+    def test_if_alter_not_None_query_db_for_alters_op_id(self, m_run):
+        query = "SELECT operator_id FROM operators "
+        query += "WHERE operator_name = 'orange';"
         alter_mod("orange", 1)
-        assert call("apple") in m_run.call_args_list
+        assert call(query) in m_run.call_args_list
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.update_query")
-    def test_if_alter_not_in_db_then_do_nothing_more(self, m_query, m_run):
+    def test_if_alter_not_in_db_then_do_nothing_more(self, m_run):
         m_run.return_value = []
         alter_mod("orange", 1)
-        m_query.assert_not_called()
+        m_run.assert_called_once()
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.update_query")
-    @patch("src.utils.insert.select_query")
-    def test_if_alter_in_db_update_op_and_alter_alter_id(
-            self, m_s_query, m_u_query, m_run
-    ):
-        m_run.return_value = [{"operator_id": 1}]
-        m_s_query.return_value = "apple"
-        m_u_query.side_effect = ["banana", "lemon"]
+    def test_if_alter_in_db_update_op_and_alter_alter_id(self, m_run):
+        m_run.return_value = [{"operator_id": 5}]
+        op_query = "UPDATE operators SET alter = 5 WHERE operator_id = 1;"
+        alt_query = "UPDATE operators SET alter = 1 WHERE operator_id = 5;"
         alter_mod("orange", 1)
-        assert call("banana") == m_run.call_args_list[1]
-        assert call("lemon") == m_run.call_args_list[2]
+        assert call(op_query) == m_run.call_args_list[1]
+        assert call(alt_query) == m_run.call_args_list[2]
 
 
 class Test_insert_tags:
@@ -371,14 +366,15 @@ class Test_insert_tags:
         assert tag_ids == [1]
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_makes_insert_query_for_each_new_tag(self, m_query, m_run):
+    def test_makes_insert_query_for_each_new_tag(self, m_run):
         stored = {"banana": 1}
         fresh = ["lemon", "apple", "banana"]
-        m_query.side_effect = ["one", "two"]
+        query_1 = "INSERT INTO tags (tag_name) VALUES ('lemon') "
+        query_1 += "RETURNING tag_id;"
+        query_2 = "INSERT INTO tags (tag_name) VALUES ('apple') "
+        query_2 += "RETURNING tag_id;"
         insert_tags(stored, fresh)
-        assert m_query.call_count == 2
-        assert m_run.call_args_list == [call("one"), call("two")]
+        assert m_run.call_args_list == [call(query_1), call(query_2)]
 
     @patch("src.utils.insert.run")
     def test_appends_returned_tag_id_for_each_new_tag(self, m_run):
@@ -407,23 +403,13 @@ class Test_insert_operators_tags:
         m_run.assert_not_called()
 
     @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_makes_insert_query_for_each_new_tag(self, m_query, m_run):
-        stored_tag_ids = [1, 2, 3]
-        op_id = 16
-        tag_ids = [4, 5]
-        m_query.side_effect = ["one", "two"]
-        insert_operators_tags(stored_tag_ids, op_id, tag_ids)
-        assert m_query.call_count == 2
-        assert m_run.call_args_list == [call("one"), call("two")]
-
-    @patch("src.utils.insert.run")
-    @patch("src.utils.insert.insert_query")
-    def test_makes_insert_query_for_only_new_tags(self, m_query, m_run):
+    def test_makes_insert_query_for_each_new_tag(self, m_run):
         stored_tag_ids = [1, 2, 3]
         op_id = 16
         tag_ids = [1, 2, 3, 4, 5]
-        m_query.side_effect = ["one", "two"]
+        query_1 = "INSERT INTO operators_tags (tag_id, operator_id) "
+        query_1 += "VALUES (4, 16);"
+        query_2 = "INSERT INTO operators_tags (tag_id, operator_id) "
+        query_2 += "VALUES (5, 16);"
         insert_operators_tags(stored_tag_ids, op_id, tag_ids)
-        assert m_query.call_count == 2
-        assert m_run.call_args_list == [call("one"), call("two")]
+        assert m_run.call_args_list == [call(query_1), call(query_2)]
