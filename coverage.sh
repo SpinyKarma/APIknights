@@ -1,3 +1,3 @@
 #!/bin/bash
 
-coverage run --omit 'venv/*' -m pytest && coverage report -m
+coverage run  -m pytest && coverage report -m --omit 'test/*'
