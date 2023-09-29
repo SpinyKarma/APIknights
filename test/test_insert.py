@@ -126,47 +126,6 @@ class Test_insert_archetype:
         assert fresh == fresh_clone
 
 
-class Test_insert_module:
-    @patch("src.utils.insert.run")
-    def test_runs_insert_query_if_stored_is_empty(self, m_run):
-        stored = []
-        fresh = {"apple": "orange"}
-        query = "INSERT INTO modules (apple) VALUES ('orange') "
-        query += "RETURNING module_id;"
-        insert_module(stored, fresh)
-        m_run.assert_called_with(query)
-
-    @patch("src.utils.insert.run")
-    def test_returns_module_id_from_query_if_stored_is_empty(self, m_run):
-        stored = []
-        fresh = {"apple": "orange"}
-        m_run.return_value = [{"module_id": 15}]
-        m_id = insert_module(stored, fresh)
-        assert m_id == 15
-
-    @patch("src.utils.insert.run")
-    def test_does_not_query_db_if_stored_not_empty(self, m_run):
-        stored = [{"module_id": 15}]
-        fresh = {"apple": "orange"}
-        insert_module(stored, fresh)
-        m_run.assert_not_called()
-
-    def test_returns_module_id_from_stored_if_stored_not_empty(self):
-        stored = [{"module_id": 15}]
-        fresh = {"apple": "orange"}
-        m_id = insert_module(stored, fresh)
-        assert m_id == 15
-
-    def test_does_not_mutate_the_input_arguments(self):
-        stored = [{"module_id": 15}]
-        fresh = {"apple": "orange"}
-        stored_clone = deepcopy(stored)
-        fresh_clone = deepcopy(fresh)
-        insert_module(stored, fresh)
-        assert stored == stored_clone
-        assert fresh == fresh_clone
-
-
 class Test_insert_skill:
     @patch("src.utils.insert.run")
     def test_runs_insert_query_if_stored_is_empty(self, m_run):
@@ -208,13 +167,54 @@ class Test_insert_skill:
         assert fresh == fresh_clone
 
 
+class Test_insert_module:
+    @patch("src.utils.insert.run")
+    def test_runs_insert_query_if_stored_is_empty(self, m_run):
+        stored = []
+        fresh = {"apple": "orange"}
+        query = "INSERT INTO modules (apple) VALUES ('orange') "
+        query += "RETURNING module_id;"
+        insert_module(stored, fresh)
+        m_run.assert_called_with(query)
+
+    @patch("src.utils.insert.run")
+    def test_returns_module_id_from_query_if_stored_is_empty(self, m_run):
+        stored = []
+        fresh = {"apple": "orange"}
+        m_run.return_value = [{"module_id": 15}]
+        m_id = insert_module(stored, fresh)
+        assert m_id == 15
+
+    @patch("src.utils.insert.run")
+    def test_does_not_query_db_if_stored_not_empty(self, m_run):
+        stored = [{"module_id": 15}]
+        fresh = {"apple": "orange"}
+        insert_module(stored, fresh)
+        m_run.assert_not_called()
+
+    def test_returns_module_id_from_stored_if_stored_not_empty(self):
+        stored = [{"module_id": 15}]
+        fresh = {"apple": "orange"}
+        m_id = insert_module(stored, fresh)
+        assert m_id == 15
+
+    def test_does_not_mutate_the_input_arguments(self):
+        stored = [{"module_id": 15}]
+        fresh = {"apple": "orange"}
+        stored_clone = deepcopy(stored)
+        fresh_clone = deepcopy(fresh)
+        insert_module(stored, fresh)
+        assert stored == stored_clone
+        assert fresh == fresh_clone
+
+
 class Test_add_ids_to_op:
     def test_modifies_fresh_using_ids(self):
         a_id = 5
         m_ids = [6, 7]
         s_ids = [8, 9, 10]
         fresh = {"name": "banana"}
-        out = add_ids_to_op(fresh, a_id, m_ids, s_ids)
+        out = add_ids_to_op(fresh, a_id, s_ids, m_ids)
         expected = {
             "name": "banana",
             "archetype_id": 5,
@@ -231,7 +231,7 @@ class Test_add_ids_to_op:
         m_ids = [6]
         s_ids = [8, 9, 10]
         fresh = {"name": "banana"}
-        out = add_ids_to_op(fresh, a_id, m_ids, s_ids)
+        out = add_ids_to_op(fresh, a_id, s_ids, m_ids)
         expected = {
             "name": "banana",
             "archetype_id": 5,
@@ -247,7 +247,7 @@ class Test_add_ids_to_op:
         m_ids = [6]
         s_ids = [8]
         fresh = {"name": "banana"}
-        out = add_ids_to_op(fresh, a_id, m_ids, s_ids)
+        out = add_ids_to_op(fresh, a_id, s_ids, m_ids)
         expected = {
             "name": "banana",
             "archetype_id": 5,
@@ -261,7 +261,7 @@ class Test_add_ids_to_op:
         m_ids = [6]
         s_ids = [8]
         fresh = {"name": "banana", "alter": "orange"}
-        out = add_ids_to_op(fresh, a_id, m_ids, s_ids)
+        out = add_ids_to_op(fresh, a_id, s_ids, m_ids)
         expected = {
             "name": "banana",
             "archetype_id": 5,
@@ -278,7 +278,7 @@ class Test_add_ids_to_op:
         m_ids_clone = [6]
         s_ids_clone = [8]
         fresh_clone = {"name": "banana", "alter": "orange"}
-        add_ids_to_op(fresh, a_id, m_ids, s_ids)
+        add_ids_to_op(fresh, a_id, s_ids, m_ids)
         assert m_ids == m_ids_clone
         assert s_ids == s_ids_clone
         assert fresh == fresh_clone
@@ -419,6 +419,20 @@ class Test_insert_operators_tags:
 
 
 class Test_insert:
+    o_data = {"operator_name": "banana"}
+    a_data = {"archetype_name": "apple"}
+    s_data = [
+        {"skill_name": "orange_1"},
+        {"skill_name": "orange_2"},
+        {"skill_name": "orange_3"}
+    ]
+    m_data = [
+        {"module_name": "lemon_1"},
+        {"module_name": "lemon_2"}
+    ]
+    t_data = ["pear", "pineapple"]
+    run_list = ["stored_a", "stored_s_1"]
+
     @patch("src.utils.insert.connect")
     @patch("src.utils.insert.log.warn")
     def test_gives_warning_message_if_db_doesnt_exist(self, m_warn, m_connect):
