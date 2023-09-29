@@ -66,6 +66,15 @@ class Test_Debug:
         ]
 
     @patch("src.utils.debugger.pprint")
+    def test_on_takes_same_args_as_call_switches_on_then_calls(self, m_pprint):
+        debug = Debug()
+        debug.on("banana", "lemon", apple="apple", orange="orange")
+        assert m_pprint.call_args_list == [
+            call("banana", apple="apple", orange="orange"),
+            call("lemon", apple="apple", orange="orange")
+        ]
+
+    @patch("src.utils.debugger.pprint")
     def test_warn_adds_yellow_colour_chars_before_pass_to_call(self, m_pprint):
         debug = Debug(True)
         debug.warn("banana")
@@ -112,3 +121,14 @@ class Test_Debug:
             call("\x1b[91mbanana\x1b[0m", orange="orange"),
             call("\x1b[91mapple\x1b[0m", orange="orange")
         ]
+
+    @patch("src.utils.debugger.pprint")
+    def test_x_func_does_nothing_to_turn_single_statement_off(self, m_pprint):
+        debug = Debug(True)
+        debug.x()
+        m_pprint.assert_not_called()
+
+    def test_x_takes_call_args_to_not_throw_err_when_switched(self):
+        debug = Debug(True)
+        debug.x("banana", "apple", orange="orange")
+        assert True
