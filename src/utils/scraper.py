@@ -393,7 +393,7 @@ def scrape(name):
             module[f"level_{m_level}_talent"] = mod_talent
         if m_level == "3":
             modules.append(module)
-    return operator_info, archetype_info, skill_info, tags, modules
+    return operator_info, archetype_info, skill_info, modules, tags
 
 
 # if __name__ == "__main__":
