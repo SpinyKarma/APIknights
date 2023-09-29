@@ -256,7 +256,7 @@ class Test_add_ids_to_op:
         }
         assert out == expected
 
-    def test_deletes_alter_info_from_fresh(self):
+    def test_alter_info_from_fresh_to_none(self):
         a_id = 5
         m_ids = [6]
         s_ids = [8]
@@ -266,7 +266,8 @@ class Test_add_ids_to_op:
             "name": "banana",
             "archetype_id": 5,
             "module_1_id": 6,
-            "skill_1_id": 8
+            "skill_1_id": 8,
+            "alter": None
         }
         assert out == expected
 
