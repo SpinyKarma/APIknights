@@ -148,6 +148,26 @@ def scrape(name):
     op_stat_object = parse_stat_obj(op_stat_script)
     operator_info["level_stats"] = op_stat_object
 
+    # Operator Range
+    operator_info["ranges"] = {}
+    operator_info["ranges"]["e0"] = parse_range(
+        soup.find("div", {"id": "image-tab-1"}).find(
+            "div", class_="range-box"
+        )
+    )
+    if rarity > 2:
+        operator_info["ranges"]["e1"] = parse_range(
+            soup.find("div", {"id": "image-tab-2"}).find(
+                "div", class_="range-box"
+            )
+        )
+    if rarity > 3:
+        operator_info["ranges"]["e2"] = parse_range(
+            soup.find("div", {"id": "image-tab-3"}).find(
+                "div", class_="range-box"
+            )
+        )
+
     # Operator Potentials
     op_pots = soup.find("div", class_="potential-cell")
     operator_info["potentials"] = parse_pots(op_pots)
@@ -182,6 +202,18 @@ def scrape(name):
     limited = re.search("LIMITED", op_obtain_info)
 
     operator_info["limited"] = True if limited else False
+
+    # Free
+    operator_info["free"] = False
+    for item in soup.find_all("div", class_="approach-name"):
+        if item.text.strip() in [
+            "Activity Acquisition",
+            "Event Reward",
+            "Code Redemption",
+            "Anniversary Reward",
+            "Main Story"
+        ]:
+            operator_info["free"] = True
 
     # EN Release Info
     en_release = re.search(
@@ -238,26 +270,6 @@ def scrape(name):
 
     # Archetype Attack Type
     archetype_info["attack_type"] = op_position[1].find("a").text
-
-    # Archetype Range
-    archetype_info["ranges"] = {}
-    archetype_info["ranges"]["e0"] = parse_range(
-        soup.find("div", {"id": "image-tab-1"}).find(
-            "div", class_="range-box"
-        )
-    )
-    if rarity > 2:
-        archetype_info["ranges"]["e1"] = parse_range(
-            soup.find("div", {"id": "image-tab-2"}).find(
-                "div", class_="range-box"
-            )
-        )
-    if rarity > 3:
-        archetype_info["ranges"]["e2"] = parse_range(
-            soup.find("div", {"id": "image-tab-3"}).find(
-                "div", class_="range-box"
-            )
-        )
 
     # Archetype Cost Gains On Promotion
     e1_cost_gain = None
