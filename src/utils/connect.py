@@ -33,6 +33,11 @@ def run(query):
     '''
     with connect() as db:
         res = db.run(query)
-    cols = [col["name"] for col in db.columns]
+    if not res:
+        res = []
+    if not db.columns:
+        cols = []
+    else:
+        cols = [col["name"] for col in db.columns]
     res_dicts = [{cols[i]: item[i] for i in range(len(cols))} for item in res]
     return res_dicts
