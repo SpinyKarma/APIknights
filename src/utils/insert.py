@@ -1,7 +1,6 @@
 from pg8000.exceptions import DatabaseError
 from copy import deepcopy
 from src.utils.connect import connect, run
-# from src.utils.scraper import scrape
 from src.utils.formatting import (
     select_query,
     insert_query,
@@ -236,8 +235,9 @@ def insert(operator_info, archetype_info, skill_info, module_info, tag_info):
     insert_operators_tags(stored_o_t, o_id, t_ids)
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
+    # from src.utils.scraper import scrape
     # insert(*scrape("cutter"))
     # query = select_query("operators", "operator_id, operator_name, alter")
     # log(run(query))
-    pass
+    # pass
