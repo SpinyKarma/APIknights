@@ -34,6 +34,14 @@ class Test_run:
         assert run("") == []
 
     @patch("src.utils.connect.connect")
+    def test_returns_empty_list_no_returns_requested_of_db(self, m_connect):
+        m_db = Mock()
+        m_db.run.return_value = None
+        m_db.columns = None
+        m_connect.return_value.__enter__.return_value = m_db
+        assert run("") == []
+
+    @patch("src.utils.connect.connect")
     def test_one_dict_in_list_when_db_one_row_response(self, m_connect):
         m_db = Mock()
         m_db.run.return_value = [["banana"]]

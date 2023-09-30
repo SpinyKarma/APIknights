@@ -9,6 +9,7 @@ class Debug:
         if self.enabled:
             for item in args:
                 pprint(item, **kwargs)
+            print()
 
     def warn(self, *args, **kwargs):
         self.__call__(
@@ -22,8 +23,12 @@ class Debug:
             **kwargs
         )
 
-    def on(self):
+    def x(self, *args, **kwargs):
+        pass
+
+    def on(self, *args, **kwargs):
         self.enabled = True
+        self(*args, **kwargs)
 
     def off(self):
         self.enabled = False
