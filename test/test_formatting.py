@@ -95,6 +95,12 @@ class Test_lit:
         double_valid_str = lit(valid_str)
         assert double_valid_str == valid_str
 
+    def test_properly_substitutes_quote_not_at_ends_with_two_quotes(self):
+        test_str = "banana's"
+        test_valid_str = "'banana''s'"
+        assert lit(test_str) == test_valid_str
+        assert lit(test_valid_str) == test_valid_str
+
 
 class Test_select_query:
     def test_returns_select_all_when_only_passed_table(self):
