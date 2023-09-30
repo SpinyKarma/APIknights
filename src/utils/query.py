@@ -66,14 +66,21 @@ from copy import deepcopy
 '''
 
 
+def validate_cols(cols: str | list):
+    if cols == "":
+        return cols
+    elif isinstance(cols, str):
+        cols = [string.strip() for string in cols.split(",")]
+    return ", ".join(idf(cols))
+
+
 class IncompleteQueryErr(Exception):
     pass
 
 
 class Query:
-    def __init__(self, table):
+    def __init__(self, table: str):
         self.table = idf(table)
-        self.type = None
 
     def __call__(self):
         return self.__str__()
@@ -81,56 +88,19 @@ class Query:
     def __str__(self):
         raise IncompleteQueryErr
 
-    def select(self, cols="*"):
-        pass
-
-    def insert(self, data):
-        pass
-
-    def update(self, changes):
-        pass
-
-    def where(self, filters):
-        pass
-
-    def returning(self, cols="*"):
-        pass
+    def select(self, cols: str = "*"):
+        return SelectQuery(self.table, cols)
 
 
 class SelectQuery(Query):
-    def __init__(self, table, cols="*"):
+    def __init__(self, table: str, cols: str | list = "*"):
         super().__init__(table)
-        # cols validation here
         self.joins = []
-        self.cols = col_validate(cols)
-        self.type = "select"
+        self.cols = validate_cols(cols)
 
     def join(self, table1, on, table2=None, other_on=None, join_type="inner"):
         pass
 
     def __str__(self):
-        pass
-
-
-class InsertQuery(Query):
-    def __init__(self, table, data):
-        super().__init__(table)
-        # data validation here
-        self.data = data
-        self.type = "insert"
-
-
-class UpdateQuery(Query):
-    def __init__(self, table, changes):
-        super().__init__(table)
-        # changes validation here
-        self.changes = changes
-        self.type = "update"
-
-
-def col_validate(cols):
-    pass
-
-
-def filter_vaidate(filters):
-    pass
+        query = f"SELECT {self.cols} FROM {self.table};"
+        return query
