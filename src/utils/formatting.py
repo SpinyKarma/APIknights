@@ -35,7 +35,6 @@ def lit(data):
         contents formatted, returning the same data type that was passed.
         Uses j_d to process dicts into strings.
     '''
-    print(data)
     if isinstance(data, list):
         return [lit(item) for item in data]
     elif isinstance(data, str) and data[0] == "'" and data[-1] == "'":
