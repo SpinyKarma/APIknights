@@ -124,12 +124,12 @@ class SelectQuery(Query):
     def __str__(self) -> str:
         query = f"SELECT {self.cols} FROM {self.table}"
         for j in self.joins:
-            query += f' {j["j_type"].upper()} JOIN'
+            query += f'\n{j["j_type"].upper()} JOIN'
             query += f' {j["table"]} ON {j["table"]}.{j["on"]}'
             query += f' = {j.get("table_2", self.table)}.'
             query += j.get("on_2", j["on"])
         if self.wheres != []:
-            query += " WHERE "
+            query += "\nWHERE "
             and_join = [
                 " AND ".join([f"{key} = {w[key]}" for key in w])
                 for w in self.wheres

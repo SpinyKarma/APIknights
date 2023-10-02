@@ -168,34 +168,34 @@ class Test_SelectQuery:
 
     def test_str_method_appends_basic_join_to_query(self):
         s = SelectQuery("banana").join("one", "two")
-        expected = 'SELECT * FROM banana '
-        expected += 'INNER JOIN one ON one.two = banana.two;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nINNER JOIN one ON one.two = banana.two;'
         assert str(s) == expected
 
     def test_str_method_appends_join_using_table_2(self):
         s = SelectQuery("banana").join("one", "two", table_2="three")
-        expected = 'SELECT * FROM banana '
-        expected += 'INNER JOIN one ON one.two = three.two;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nINNER JOIN one ON one.two = three.two;'
         assert str(s) == expected
 
     def test_str_method_appends_join_using_on_2(self):
         s = SelectQuery("banana").join("one", "two", on_2="four")
-        expected = 'SELECT * FROM banana '
-        expected += 'INNER JOIN one ON one.two = banana.four;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nINNER JOIN one ON one.two = banana.four;'
         assert str(s) == expected
 
     def test_str_method_changes_join_type_using_j_type(self):
         s = SelectQuery("banana").join("one", "two", j_type="full")
-        expected = 'SELECT * FROM banana '
-        expected += 'FULL JOIN one ON one.two = banana.two;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nFULL JOIN one ON one.two = banana.two;'
         assert str(s) == expected
 
     def test_str_method_appends_arbitrary_join(self):
         s = SelectQuery("banana").join(
             "one", "two", table_2="three", on_2="four", j_type="left"
         )
-        expected = 'SELECT * FROM banana '
-        expected += 'LEFT JOIN one ON one.two = three.four;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nLEFT JOIN one ON one.two = three.four;'
         assert str(s) == expected
 
     def test_str_method_appends_all_joins_in_list(self):
@@ -204,9 +204,9 @@ class Test_SelectQuery:
         ).join(
             "alpha", "beta", on_2="gamma", j_type="full"
         )
-        expected = 'SELECT * FROM banana '
-        expected += 'LEFT JOIN one ON one.two = three.two '
-        expected += 'FULL JOIN alpha ON alpha.beta = banana.gamma;'
+        expected = 'SELECT * FROM banana'
+        expected += '\nLEFT JOIN one ON one.two = three.two'
+        expected += '\nFULL JOIN alpha ON alpha.beta = banana.gamma;'
         assert str(s) == expected
 
     def test_where_appends_dict_to_self_wheres_list(self):
@@ -235,38 +235,38 @@ class Test_SelectQuery:
 
     def test_str_method_appends_single_where_clause_to_query(self):
         s = SelectQuery("banana").where({"apple": "orange"})
-        assert str(s) == "SELECT * FROM banana WHERE apple = 'orange';"
+        assert str(s) == "SELECT * FROM banana\nWHERE apple = 'orange';"
 
     def test_str_method_appends_extra_keys_in_filter_with_and(self):
         s = SelectQuery("banana").where({"apple": "orange", "lemon": "lime"})
-        expected = "SELECT * FROM banana WHERE apple = 'orange' "
-        expected += "AND lemon = 'lime';"
+        expected = "SELECT * FROM banana"
+        expected += "\nWHERE apple = 'orange' AND lemon = 'lime';"
         assert str(s) == expected
 
     def test_str_method_appends_extra_filter_dicts_with_or(self):
         s = SelectQuery("banana")
         s.where({"apple": "orange"})
         s.where({"lemon": "lime"})
-        expected = "SELECT * FROM banana WHERE apple = 'orange' "
-        expected += "OR lemon = 'lime';"
+        expected = "SELECT * FROM banana"
+        expected += "\nWHERE apple = 'orange' OR lemon = 'lime';"
         assert str(s) == expected
 
     def test_str_method_appends_arbitrary_dicts(self):
         s = SelectQuery("banana")
         s.where({"apple": "orange", "one": "two"})
         s.where({"lemon": "lime"})
-        s.where({"alpha": "beta"})
-        expected = "SELECT * FROM banana "
-        expected += "WHERE apple = 'orange' AND one = 'two' "
+        s.where({"alpha": "beta", "gamma": "delta"})
+        expected = "SELECT * FROM banana"
+        expected += "\nWHERE apple = 'orange' AND one = 'two' "
         expected += "OR lemon = 'lime' "
-        expected += "OR alpha = 'beta';"
+        expected += "OR alpha = 'beta' AND gamma = 'delta';"
         assert str(s) == expected
 
     def test_str_method_appends_where_clause_after_join_clause(self):
         s = SelectQuery("banana")
         s.where({"apple": "orange"})
         s.join("lemon", "lime")
-        expected = "SELECT * FROM banana "
-        expected += "INNER JOIN lemon ON lemon.lime = banana.lime "
-        expected += "WHERE apple = 'orange';"
+        expected = "SELECT * FROM banana"
+        expected += "\nINNER JOIN lemon ON lemon.lime = banana.lime"
+        expected += "\nWHERE apple = 'orange';"
         assert str(s) == expected
