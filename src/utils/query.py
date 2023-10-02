@@ -74,6 +74,11 @@ def validate_cols(cols: str | list):
     return ", ".join(idf(cols))
 
 
+def validate_filters(filters: dict):
+    new_dict = {idf(key): lit(filters[key]) for key in filters}
+    return new_dict
+
+
 class IncompleteQueryErr(Exception):
     pass
 
@@ -88,19 +93,48 @@ class Query:
     def __str__(self):
         raise IncompleteQueryErr
 
-    def select(self, cols: str = "*"):
+    def select(self, cols: str | list = "*"):
         return SelectQuery(self.table, cols)
 
 
 class SelectQuery(Query):
     def __init__(self, table: str, cols: str | list = "*"):
         super().__init__(table)
-        self.joins = []
         self.cols = validate_cols(cols)
+        self.joins = []
+        self.wheres = []
 
-    def join(self, table1, on, table2=None, other_on=None, join_type="inner"):
-        pass
+    def join(self, table_1: str, on: str, table_2: str = None,
+             on_2: str = None, j_type: str = "inner"):
+        if j_type.lower() not in ["inner", "full", "left", "right"]:
+            j_type = "inner"
+        j = {"table": idf(table_1), "on": idf(on), "j_type": j_type.lower()}
+        if table_2:
+            j["table_2"] = idf(table_2)
+        if on_2:
+            j["on_2"] = idf(on_2)
+        self.joins.append(j)
+        return self
 
-    def __str__(self):
-        query = f"SELECT {self.cols} FROM {self.table};"
+    def where(self, filters: dict):
+        if filters != {}:
+            self.wheres.append(validate_filters(filters))
+        return self
+
+    def __str__(self) -> str:
+        query = f"SELECT {self.cols} FROM {self.table}"
+        for j in self.joins:
+            query += f' {j["j_type"].upper()} JOIN'
+            query += f' {j["table"]} ON {j["table"]}.{j["on"]}'
+            query += f' = {j.get("table_2", self.table)}.'
+            query += j.get("on_2", j["on"])
+        if self.wheres != []:
+            query += " WHERE "
+            and_join = [
+                " AND ".join([f"{key} = {w[key]}" for key in w])
+                for w in self.wheres
+            ]
+            or_join = " OR ".join(and_join)
+            query += or_join
+        query += ";"
         return query
