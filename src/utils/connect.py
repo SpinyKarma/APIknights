@@ -32,7 +32,7 @@ def run(query):
                 returned row, with the column headings as the keys.
     '''
     with connect() as db:
-        res = db.run(query)
+        res = db.run(str(query))
     if not res:
         res = []
     if not db.columns:
