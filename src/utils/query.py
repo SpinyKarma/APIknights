@@ -68,10 +68,10 @@ from copy import deepcopy
 
 def validate_cols(cols: str | list):
     if cols == "":
-        return cols
+        return []
     elif isinstance(cols, str):
         cols = [string.strip() for string in cols.split(",")]
-    return ", ".join(idf(cols))
+    return idf(cols)
 
 
 def validate_filters(filters: dict):
@@ -79,7 +79,18 @@ def validate_filters(filters: dict):
     return new_dict
 
 
+def validate_data(l: int, rows: list):
+    for sub in rows:
+        if len(sub) != l:
+            raise MismatchedRowError
+    return lit(rows)
+
+
 class IncompleteQueryErr(Exception):
+    pass
+
+
+class MismatchedRowError(Exception):
     pass
 
 
@@ -96,6 +107,9 @@ class Query:
     def select(self, cols: str | list = "*"):
         return SelectQuery(self.table, cols)
 
+    def insert(self, cols: str | list = [], rows: list = []):
+        return InsertQuery(self.table, cols, rows)
+
 
 class SelectQuery(Query):
     def __init__(self, table: str, cols: str | list = "*"):
@@ -103,6 +117,10 @@ class SelectQuery(Query):
         self.cols = validate_cols(cols)
         self.joins = []
         self.wheres = []
+
+    def select(self, cols="*"):
+        self.cols = validate_cols(cols)
+        return self
 
     def join(self, table_1: str, on: str, table_2: str = None,
              on_2: str = None, j_type: str = "inner"):
@@ -122,7 +140,7 @@ class SelectQuery(Query):
         return self
 
     def __str__(self) -> str:
-        query = f"SELECT {self.cols} FROM {self.table}"
+        query = f"SELECT {', '.join(self.cols)} FROM {self.table}"
         for j in self.joins:
             query += f'\n{j["j_type"].upper()} JOIN'
             query += f' {j["table"]} ON {j["table"]}.{j["on"]}'
@@ -136,5 +154,47 @@ class SelectQuery(Query):
             ]
             or_join = " OR ".join(and_join)
             query += or_join
+        query += ";"
+        return query
+
+    def clear(self, param):
+        if param == "join":
+            self.joins = []
+        elif param == "where":
+            self.wheres = []
+        return self
+
+
+class InsertQuery(Query):
+    def __init__(self, table: str, cols: str | list = [], rows: list = []):
+        super().__init__(table)
+        self.cols = validate_cols(cols)
+        self.rows = validate_data(len(self.cols), rows)
+        self.returns = None
+
+    def row(self, row_data):
+        self.rows += validate_data(len(self.cols), row_data)
+        return self
+
+    def insert(self, cols: str | list = [], rows: list = []):
+        self.cols = validate_cols(cols)
+        self.rows = validate_data(len(self.cols), rows)
+        return self
+
+    def returning(self, returns=["*"]):
+        self.returns = validate_cols(returns)
+        return self
+
+    def __str__(self):
+        if self.rows == [] or self.cols == []:
+            raise IncompleteQueryErr
+        query = f"INSERT INTO {self.table}"
+        query += f"\n({', '.join(self.cols)})"
+        query += "\nVALUES"
+        joined_rows = [', '.join(row) for row in self.rows]
+        compiled_rows = "\n("+"),\n(".join(joined_rows)+")"
+        query += compiled_rows
+        if self.returns:
+            query += f"\nRETURNING {', '.join(self.returns)}"
         query += ";"
         return query
