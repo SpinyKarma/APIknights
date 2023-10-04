@@ -59,7 +59,7 @@ class Test_idf:
         test_str = "banana 2"
         valid_str = idf(test_str)
         double_valid_str = idf(valid_str)
-        assert double_valid_str == valid_str
+        assert double_valid_str == valid_str == '"banana 2"'
 
 
 class Test_lit:
@@ -93,7 +93,7 @@ class Test_lit:
         test_str = "banana"
         valid_str = lit(test_str)
         double_valid_str = lit(valid_str)
-        assert double_valid_str == valid_str
+        assert double_valid_str == valid_str == "'banana'"
 
     def test_properly_substitutes_quote_not_at_ends_with_two_quotes(self):
         test_str = "banana's"
