@@ -1,12 +1,14 @@
 from src.utils.query import (
     validate_cols,
-    validate_filters,
-    validate_data,
+    validate_dict,
+    validate_rows,
     IncompleteQueryErr,
-    MismatchedRowError,
+    MismatchedRowErr,
+    ImplicitUpdateErr,
     Query,
     SelectQuery,
-    InsertQuery
+    InsertQuery,
+    UpdateQuery
 )
 from src.utils.formatting import idf, lit
 import pytest
@@ -32,27 +34,27 @@ class Test_validate_cols:
         ) == ['"apple 1"', '"pear 2"', '"banana 3"']
 
 
-class Test_validate_filters:
+class Test_validate_dict:
     def test_returns_empty_when_passed_empty(self):
-        assert {} == validate_filters({})
+        assert {} == validate_dict({})
 
     def test_validates_keys_and_vals_before_return(self):
         filter_dict = {"lemon 1": "lime's"}
         validated_dict = {'"lemon 1"': "'lime''s'"}
-        assert validated_dict == validate_filters(filter_dict)
+        assert validated_dict == validate_dict(filter_dict)
 
 
-class Test_validate_data:
+class Test_validate_rows:
     def test_returns_empty_list_when_passed_empty_list(self):
-        assert validate_data(0, []) == []
+        assert validate_rows(0, []) == []
 
-    def test_raise_MismatchedRowError_if_len_any_sublist_not_passed_l(self):
-        validate_data(2, [[1, 2], [3, 4]])
-        with pytest.raises(MismatchedRowError):
-            validate_data(2, [[1, 2], [3]])
+    def test_raise_MismatchedRowErr_if_len_any_sublist_not_passed_l(self):
+        validate_rows(2, [[1, 2], [3, 4]])
+        with pytest.raises(MismatchedRowErr):
+            validate_rows(2, [[1, 2], [3]])
 
     def test_validates_list_and_sublists_with_lit(self):
-        assert validate_data(1, [["apple"]]) == lit([["apple"]])
+        assert validate_rows(1, [["apple"]]) == lit([["apple"]])
 
 
 class Test_Query:
@@ -128,6 +130,17 @@ class Test_Query:
         q = Query("banana 1")
         i = q.insert()
         assert i.rows == []
+
+    def test_update_method_returns_UpdateQuery_with_self_table(self):
+        q = Query("banana")
+        u = q.update()
+        assert isinstance(u, UpdateQuery)
+        assert u.table == 'banana'
+
+    def test_update_method_passes_changes_arg_to_UpdateQuery(self):
+        q = Query("banana")
+        u = q.update({"apple": "orange"})
+        assert u.changes == validate_dict({"apple": "orange"})
 
 
 class Test_SelectQuery:
@@ -283,15 +296,15 @@ class Test_SelectQuery:
         s.where({})
         assert len(s.wheres) == 0
 
-    def test_passes_dict_to_validate_filters_before_appending(self):
+    def test_passes_dict_to_validate_dict_before_appending(self):
         filter_dict = {"apple": "orange"}
-        validated_dict = validate_filters(filter_dict)
+        validated_dict = validate_dict(filter_dict)
         s = SelectQuery("banana").where(filter_dict)
         assert s.wheres == [validated_dict]
 
     def test_succesive_calls_add_new_dicts_to_list(self):
         filter_dict = {"apple": "orange"}
-        validated_dict = validate_filters(filter_dict)
+        validated_dict = validate_dict(filter_dict)
         s = SelectQuery("banana").where(filter_dict).where(filter_dict)
         assert s.wheres == [validated_dict, validated_dict]
 
@@ -302,7 +315,8 @@ class Test_SelectQuery:
     def test_str_method_appends_extra_keys_in_filter_with_and(self):
         s = SelectQuery("banana").where({"apple": "orange", "lemon": "lime"})
         expected = "SELECT * FROM banana"
-        expected += "\nWHERE apple = 'orange' AND lemon = 'lime';"
+        expected += "\nWHERE apple = 'orange'"
+        expected += "\nAND lemon = 'lime';"
         assert str(s) == expected
 
     def test_str_method_appends_extra_filter_dicts_with_or(self):
@@ -310,7 +324,8 @@ class Test_SelectQuery:
         s.where({"apple": "orange"})
         s.where({"lemon": "lime"})
         expected = "SELECT * FROM banana"
-        expected += "\nWHERE apple = 'orange' OR lemon = 'lime';"
+        expected += "\nWHERE apple = 'orange'"
+        expected += "\nOR lemon = 'lime';"
         assert str(s) == expected
 
     def test_str_method_appends_arbitrary_dicts(self):
@@ -319,9 +334,11 @@ class Test_SelectQuery:
         s.where({"lemon": "lime"})
         s.where({"alpha": "beta", "gamma": "delta"})
         expected = "SELECT * FROM banana"
-        expected += "\nWHERE apple = 'orange' AND one = 'two' "
-        expected += "OR lemon = 'lime' "
-        expected += "OR alpha = 'beta' AND gamma = 'delta';"
+        expected += "\nWHERE apple = 'orange'"
+        expected += "\nAND one = 'two'"
+        expected += "\nOR lemon = 'lime'"
+        expected += "\nOR alpha = 'beta'"
+        expected += "\nAND gamma = 'delta';"
         assert str(s) == expected
 
     def test_str_method_appends_where_clause_after_join_clause(self):
@@ -371,19 +388,19 @@ class Test_InsertQuery:
         i = InsertQuery("banana")
         assert i.rows == []
 
-    @patch("src.utils.query.validate_data")
-    def test_InsertQuery_rows_list_of_list_uses_validate_data(self, m_val):
+    @patch("src.utils.query.validate_rows")
+    def test_InsertQuery_rows_list_of_list_uses_validate_rows(self, m_val):
         m_val.return_value = [["'lemon'"]]
         i = InsertQuery("banana", ["pears"], [["lemon"]])
         m_val.assert_called_with(len(["pears"]), [["lemon"]])
         assert i.rows == [["'lemon'"]]
 
-    def test_if_rows_sublist_not_len_of_cols_raise_MismatchedRowError(self):
-        with pytest.raises(MismatchedRowError):
+    def test_if_rows_sublist_not_len_of_cols_raise_MismatchedRowErr(self):
+        with pytest.raises(MismatchedRowErr):
             InsertQuery("banana", ["pears"], [["orange"], ["apple", "pear"]])
 
-    @patch("src.utils.query.validate_data")
-    def test_row_method_adds_sublists_to_rows_using_validate_data(self, m_val):
+    @patch("src.utils.query.validate_rows")
+    def test_row_method_adds_sublists_to_rows_using_validate_rows(self, m_val):
         m_val.side_effect = [[["'lemon'"]], [["'apple'"]]]
         i = InsertQuery("banana", ["pears"], [["lemon"]])
         i.row([["apple"]])
@@ -487,3 +504,186 @@ class Test_InsertQuery:
         expected += "\n('lemon')"
         expected += '\nRETURNING *;'
         assert str(i) == expected
+
+    def test_clear_method_sets_returns_to_None_when_passed_returning_str(self):
+        i = InsertQuery("banana").returning(["lemon"])
+        i.clear("returning")
+        assert i.returns == None
+
+    def test_clear_sets_rows_cols_to_empty_list_when_passed_insert(self):
+        i = InsertQuery("banana").insert(["apples"], [["orange"]])
+        i.clear("insert")
+        assert i.cols == []
+        assert i.rows == []
+
+
+class Test_UpdateQuery:
+    def test_UpdateQuery_extends_Query(self):
+        u = UpdateQuery("banana")
+        assert isinstance(u, Query)
+
+    def test_UpdateQuery_takes_optional_changes_dict(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        # asserts that TypeError not raised when extra arg passed
+
+    @patch("src.utils.query.validate_dict")
+    def test_changes_go_to_validate_dict_before_setting_to_self(self, m_val):
+        m_val.return_value = {"apple": "'orange'"}
+        u = UpdateQuery("banana", {"apple": "orange"})
+        m_val.assert_called_with({"apple": "orange"})
+        assert u.changes == {"apple": "'orange'"}
+
+    def test_where_appends_dict_to_self_wheres_list(self):
+        u = UpdateQuery("banana")
+        assert len(u.wheres) == 0
+        u.where({"apple": "orange"})
+        assert len(u.wheres) == 1
+
+    def test_does_not_append_if_passed_empty_dict(self):
+        u = UpdateQuery("banana")
+        assert len(u.wheres) == 0
+        u.where({})
+        assert len(u.wheres) == 0
+
+    @patch("src.utils.query.validate_dict")
+    def test_passes_dict_to_validate_dict_before_appending(self, m_val):
+        m_val.return_value = {"apple": "'orange'"}
+        u = UpdateQuery("banana").where({"apple": "orange"})
+        m_val.assert_called_with({"apple": "orange"})
+        assert u.wheres == [{"apple": "'orange'"}]
+
+    def test_succesive_calls_add_new_dicts_to_list(self):
+        filter_dict = {"apple": "orange"}
+        validated_dict = validate_dict(filter_dict)
+        u = UpdateQuery("banana").where(filter_dict).where(filter_dict)
+        assert u.wheres == [validated_dict, validated_dict]
+
+    def test_init_sets_self_no_filter_param_to_false(self):
+        u = UpdateQuery("banana")
+        assert u.no_filter == False
+
+    def test_where_sets_no_filter_to_true_when_passed_star(self):
+        u = UpdateQuery("banana").where("*")
+        assert u.no_filter == True
+
+    def test_adding_filters_resets_no_filter_to_false(self):
+        u = UpdateQuery("banana").where("*")
+        assert u.no_filter == True
+        u.where({"apple": "orange"})
+        assert u.no_filter == False
+
+    def test_update_method_overwrites_changes_param(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        u.update({"lemon": "lime"})
+        assert u.changes == {"lemon": "'lime'"}
+
+    def test_returning_method_takes_returns_list(self):
+        u = UpdateQuery("banana")
+        u.returning(["lemon"])
+        assert u.returns == ["lemon"]
+
+    def test_returns_can_also_be_passed_as_comma_sep_string(self):
+        u = UpdateQuery("banana")
+        u.returning("pears, apples")
+        assert u.returns == ["pears", "apples"]
+
+    def test_returns_validated_with_idf_before_setting_to_instance(self):
+        u = UpdateQuery("banana")
+        u.returning(["pears 1"])
+        assert u.returns == ['"pears 1"']
+
+    def test_returns_arg_defaults_to_star(self):
+        u = UpdateQuery("banana")
+        u.returning()
+        assert u.returns == ["*"]
+
+    def test_clear_empties_changes_dict_when_passed_update_str(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        u.clear("update")
+        assert u.changes == {}
+
+    def test_clear_empties_wheres_list_when_passed_where(self):
+        u = UpdateQuery("banana").where({"apple": "orange"})
+        u.clear("where")
+        assert u.wheres == []
+
+    def test_clear_resets_no_filter_to_false_when_passed_where(self):
+        u = UpdateQuery("banana").where("*")
+        u.clear("where")
+        assert u.no_filter == False
+
+    def test_clear_sets_returns_list_to_None_when_passed_returning(self):
+        u = UpdateQuery("banana").returning(["pears 1"])
+        u.clear("returning")
+        assert u.returns == None
+
+    def test_str_method_IncompleteQueryErr_if_changes_empty(self):
+        u = UpdateQuery("banana")
+        with pytest.raises(IncompleteQueryErr):
+            str(u)
+
+    def test_str_ImplicitUpdateErr_if_no_wheres_and_not_no_filter(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        with pytest.raises(ImplicitUpdateErr):
+            str(u)
+
+    def test_assembles_basic_update_query_no_where_clauses_no_returns(self):
+        u = UpdateQuery("banana", {"apple": "orange"}).where("*")
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange';"
+        assert str(u) == expected
+
+    def test_assembles_multiple_changes_no_where_clauses_no_returns(self):
+        u = UpdateQuery("banana", {"apple": "orange", "lemon": "lime"})
+        u.where("*")
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange',"
+        expected += "\nlemon = 'lime';"
+        assert str(u) == expected
+
+    def test_assembles_basic_update_query_with_where_clause_no_returns(self):
+        u = UpdateQuery("banana", {"apple": "orange"}).where({"lemon": "lime"})
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange'"
+        expected += "\nWHERE lemon = 'lime';"
+        assert str(u) == expected
+
+    def test_multiple_wheres_in_same_dict_joined_with_and(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        u.where({"lemon": "lime", "pear": "coconut"})
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange'"
+        expected += "\nWHERE lemon = 'lime'"
+        expected += "\nAND pear = 'coconut';"
+        assert str(u) == expected
+
+    def test_multiple_wheres_in_different_dicts_joined_with_or(self):
+        u = UpdateQuery("banana", {"apple": "orange"})
+        u.where({"lemon": "lime"}).where({"pear": "coconut"})
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange'"
+        expected += "\nWHERE lemon = 'lime'"
+        expected += "\nOR pear = 'coconut';"
+        assert str(u) == expected
+
+    def test_assembles_basic_update_query_with_returns_no_where_clauses(self):
+        u = UpdateQuery("banana", {"apple": "orange"}).where("*")
+        u.returning("peach")
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange'"
+        expected += "\nRETURNING peach;"
+        assert str(u) == expected
+
+    def test_assembles_arbitrary_update_query(self):
+        u = UpdateQuery("banana", {"apple": "orange", "lime": "coconut"})
+        u.where({"grapefruit": "grape"})
+        u.where({"one": "two", "three": "four"})
+        u.returning("peach, avocado 1")
+        expected = "UPDATE banana\nSET"
+        expected += "\napple = 'orange',"
+        expected += "\nlime = 'coconut'"
+        expected += "\nWHERE grapefruit = 'grape'"
+        expected += "\nOR one = 'two'"
+        expected += "\nAND three = 'four'"
+        expected += '\nRETURNING peach, "avocado 1";'
+        assert str(u) == expected
