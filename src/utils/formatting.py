@@ -23,8 +23,10 @@ def idf(data):
     '''
     if isinstance(data, list):
         return [idf(item) for item in data]
-    elif data == "*" or (data[0] == '"' and data[-1] == '"'):
+    elif data == "*":
         return data
+    elif isinstance(data, str) and data[0] == '"' and data[-1] == '"':
+        return identifier(data[1:-1])
     else:
         return identifier(data)
 
@@ -35,7 +37,6 @@ def lit(data):
         contents formatted, returning the same data type that was passed.
         Uses j_d to process dicts into strings.
     '''
-    print(data)
     if isinstance(data, list):
         return [lit(item) for item in data]
     elif isinstance(data, str) and data[0] == "'" and data[-1] == "'":
