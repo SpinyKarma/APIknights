@@ -1,69 +1,16 @@
 from src.utils.formatting import idf, lit
-from copy import deepcopy
-''' __init__:
-        args:
-            table:
-                name of the table to query
 
-    __str__:
-        returns:
-            the valid sql query string if self.type not None
-        raises:
-            IncompleteQueryErr if self.type == None
 
-    __call__:
-        returns self.__str__()
+class IncompleteQueryErr(Exception):
+    pass
 
-    select:
-        args:
-            cols:
-                list of col headings to select, defaults to *
-        returns:
-            SelectQuery obj with self instance values
 
-    insert:
-        args:
-            data:
-                dict or list of dicts (one per row) with cols and
-                row data as KV
-        returns:
-            InsertQuery obj with self instance values
-        raises:
-            MismatchKeysError if data dicts don't have the same key set
+class MismatchedRowErr(Exception):
+    pass
 
-    update:
-        args:
-            changes:
-                dict of cols and values to set as KV
-        returns:
-            UpdateQuery obj with self instance values
 
-    where: (Select and Update only)
-        args:
-            filters: dict of col headings and desired values as KV
-        returns:
-            self
-
-    join: (Select only)
-        args:
-            table:
-                name of other table to join
-            on:
-                self col to perform join on
-            other_on:
-                other table's col to join on, defaults to self's on
-            type:
-                determines type of join, defaults to inner if one of
-                ["inner", "left", "right", "outer"] not provided
-
-    returning: (Insert and Update only):
-        args:
-            cols:
-                list of cols to return from the query, defaults to *
-        returns:
-            self
-
-'''
+class ImplicitUpdateErr(Exception):
+    pass
 
 
 def validate_cols(cols: str | list):
@@ -93,18 +40,6 @@ def validate_rows(l: int, rows: list):
     return lit(rows)
 
 
-class IncompleteQueryErr(Exception):
-    pass
-
-
-class MismatchedRowErr(Exception):
-    pass
-
-
-class ImplicitUpdateErr(Exception):
-    pass
-
-
 class Query:
     def __init__(self, table: str):
         self.table = idf(table)
@@ -117,11 +52,19 @@ class Query:
         msg += '"insert" or "update" methods.'
         raise IncompleteQueryErr(msg)
 
+    def __eq__(self, other):
+        return str(self) == other
+
     def select(self, cols: str | list = "*"):
         return SelectQuery(self.table, cols)
 
     def insert(self, cols: str | list = [], rows: list = []):
         return InsertQuery(self.table, cols, rows)
+
+    def insert_d(self, data: dict):
+        i = InsertQuery(self.table)
+        i.insert_d(data)
+        return i
 
     def update(self, changes: dict = None):
         return UpdateQuery(self.table, changes)
@@ -134,7 +77,7 @@ class SelectQuery(Query):
         self.joins = []
         self.wheres = []
 
-    def select(self, cols="*"):
+    def select(self, cols: str | list = "*"):
         self.cols = validate_cols(cols)
         return self
 
@@ -155,7 +98,14 @@ class SelectQuery(Query):
             self.wheres.append(validate_dict(filters))
         return self
 
-    def __str__(self) -> str:
+    def clear(self, param: str):
+        if param == "join":
+            self.joins = []
+        elif param == "where":
+            self.wheres = []
+        return self
+
+    def __str__(self):
         query = f"SELECT {', '.join(self.cols)} FROM {self.table}"
         for j in self.joins:
             query += f'\n{j["j_type"].upper()} JOIN'
@@ -173,13 +123,6 @@ class SelectQuery(Query):
         query += ";"
         return query
 
-    def clear(self, param):
-        if param == "join":
-            self.joins = []
-        elif param == "where":
-            self.wheres = []
-        return self
-
 
 class InsertQuery(Query):
     def __init__(self, table: str, cols: str | list = [], rows: list = []):
@@ -188,7 +131,7 @@ class InsertQuery(Query):
         self.rows = validate_rows(len(self.cols), rows)
         self.returns = None
 
-    def row(self, row_data):
+    def row(self, row_data: list):
         self.rows += validate_rows(len(self.cols), row_data)
         return self
 
@@ -197,11 +140,16 @@ class InsertQuery(Query):
         self.rows = validate_rows(len(self.cols), rows)
         return self
 
-    def returning(self, returns=["*"]):
+    def insert_d(self, data: dict):
+        cols = list(data.keys())
+        row = [list(data.values())]
+        return self.insert(cols, row)
+
+    def returning(self, returns: str | list = "*"):
         self.returns = validate_cols(returns)
         return self
 
-    def clear(self, param):
+    def clear(self, param: str):
         if param == "returning":
             self.returns = None
         elif param == "insert":
@@ -227,18 +175,18 @@ class InsertQuery(Query):
 
 
 class UpdateQuery(Query):
-    def __init__(self, table, changes=None):
+    def __init__(self, table: str, changes: dict = None):
         super().__init__(table)
         self.changes = validate_dict(changes) if changes else {}
         self.wheres = []
         self.no_filter = False
         self.returns = None
 
-    def update(self, changes=None):
+    def update(self, changes: dict = None):
         self.changes = validate_dict(changes) if changes else {}
         return self
 
-    def where(self, filters):
+    def where(self, filters: str | dict):
         if filters == "*":
             self.no_filter = True
         elif filters != {}:
@@ -246,11 +194,11 @@ class UpdateQuery(Query):
             self.no_filter = False
         return self
 
-    def returning(self, cols="*"):
+    def returning(self, cols: str | list = "*"):
         self.returns = validate_cols(cols)
         return self
 
-    def clear(self, param):
+    def clear(self, param: str):
         if param == "update":
             self.changes = {}
         elif param == "where":

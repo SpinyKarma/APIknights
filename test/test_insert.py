@@ -78,7 +78,7 @@ class Test_insert_archetype:
     def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        query = "INSERT INTO archetypes (apple) VALUES ('orange') "
+        query = "INSERT INTO archetypes\n(apple)\nVALUES\n('orange')\n"
         query += "RETURNING archetype_id;"
         insert_archetype(stored, fresh)
         m_run.assert_called_with(query)
@@ -111,7 +111,7 @@ class Test_insert_archetype:
         fresh = {"apple": "orange"}
         merged = merge(stored[0], fresh)
         changes = diff(stored[0], merged)
-        query = "UPDATE archetypes SET apple = 'orange' "
+        query = "UPDATE archetypes\nSET\napple = 'orange'\n"
         query += "WHERE archetype_id = 15;"
         insert_archetype(stored, fresh)
         m_run.assert_called_with(query)
@@ -131,7 +131,7 @@ class Test_insert_skill:
     def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        query = "INSERT INTO skills (apple) VALUES ('orange') "
+        query = "INSERT INTO skills\n(apple)\nVALUES\n('orange')\n"
         query += "RETURNING skill_id;"
         insert_skill(stored, fresh)
         m_run.assert_called_with(query)
@@ -172,7 +172,7 @@ class Test_insert_module:
     def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         fresh = {"apple": "orange"}
-        query = "INSERT INTO modules (apple) VALUES ('orange') "
+        query = "INSERT INTO modules\n(apple)\nVALUES\n('orange')\n"
         query += "RETURNING module_id;"
         insert_module(stored, fresh)
         m_run.assert_called_with(query)
@@ -290,7 +290,7 @@ class Test_insert_operator:
     def test_runs_insert_query_if_stored_is_empty(self, m_run):
         stored = []
         id_fresh = {"apple": "orange"}
-        query = "INSERT INTO operators (apple) VALUES ('orange') "
+        query = "INSERT INTO operators\n(apple)\nVALUES\n('orange')\n"
         query += "RETURNING operator_id;"
         insert_operator(stored, id_fresh)
         m_run.assert_called_with(query)
@@ -334,7 +334,7 @@ class Test_alter_mod:
 
     @patch("src.utils.insert.run")
     def test_if_alter_not_None_query_db_for_alters_op_id(self, m_run):
-        query = "SELECT operator_id FROM operators "
+        query = "SELECT operator_id FROM operators\n"
         query += "WHERE operator_name = 'orange';"
         alter_mod("orange", 1)
         assert call(query) in m_run.call_args_list
@@ -348,8 +348,8 @@ class Test_alter_mod:
     @patch("src.utils.insert.run")
     def test_if_alter_in_db_update_op_and_alter_alter_id(self, m_run):
         m_run.return_value = [{"operator_id": 5}]
-        op_query = "UPDATE operators SET alter = 5 WHERE operator_id = 1;"
-        alt_query = "UPDATE operators SET alter = 1 WHERE operator_id = 5;"
+        op_query = "UPDATE operators\nSET\nalter = 5\nWHERE operator_id = 1;"
+        alt_query = "UPDATE operators\nSET\nalter = 1\nWHERE operator_id = 5;"
         alter_mod("orange", 1)
         assert call(op_query) == m_run.call_args_list[1]
         assert call(alt_query) == m_run.call_args_list[2]
@@ -373,9 +373,9 @@ class Test_insert_tags:
     def test_makes_insert_query_for_each_new_tag(self, m_run):
         stored = {"banana": 1}
         fresh = ["lemon", "apple", "banana"]
-        query_1 = "INSERT INTO tags (tag_name) VALUES ('lemon') "
+        query_1 = "INSERT INTO tags\n(tag_name)\nVALUES\n('lemon')\n"
         query_1 += "RETURNING tag_id;"
-        query_2 = "INSERT INTO tags (tag_name) VALUES ('apple') "
+        query_2 = "INSERT INTO tags\n(tag_name)\nVALUES\n('apple')\n"
         query_2 += "RETURNING tag_id;"
         insert_tags(stored, fresh)
         assert m_run.call_args_list == [call(query_1), call(query_2)]
@@ -411,10 +411,10 @@ class Test_insert_operators_tags:
         stored_tag_ids = [1, 2, 3]
         op_id = 16
         tag_ids = [1, 2, 3, 4, 5]
-        query_1 = "INSERT INTO operators_tags (tag_id, operator_id) "
-        query_1 += "VALUES (4, 16);"
-        query_2 = "INSERT INTO operators_tags (tag_id, operator_id) "
-        query_2 += "VALUES (5, 16);"
+        query_1 = "INSERT INTO operators_tags\n(tag_id, operator_id)\n"
+        query_1 += "VALUES\n(4, 16);"
+        query_2 = "INSERT INTO operators_tags\n(tag_id, operator_id)\n"
+        query_2 += "VALUES\n(5, 16);"
         insert_operators_tags(stored_tag_ids, op_id, tag_ids)
         assert m_run.call_args_list == [call(query_1), call(query_2)]
 
@@ -441,5 +441,5 @@ class Test_insert:
         with pytest.raises(DatabaseError):
             insert(1, 2, 3, 4, 5)
         m_warn.assert_called_with(
-            "Database doesn't exist yet, run 'seed-db.sh' to initialise."
+            "Database doesn't exist yet, run 'reset-db.sh' to initialise"
         )

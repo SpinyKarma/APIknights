@@ -15,7 +15,7 @@ def connect():
     return Connection(user, database=db, password=password)
 
 
-def run(query):
+def run(query, return_type={}):
     ''' Runs a query to a postgres database and returns the response as a list
         of dictionaies with the column headings as keys and the row data as
         values.
@@ -31,6 +31,8 @@ def run(query):
                 The response from the db formatted as a list of dicts, one per
                 returned row, with the column headings as the keys.
     '''
+    if return_type not in [{}, []]:
+        return_type = {}
     with connect() as db:
         res = db.run(str(query))
     if not res:
@@ -39,5 +41,8 @@ def run(query):
         cols = []
     else:
         cols = [col["name"] for col in db.columns]
-    res_dicts = [{cols[i]: item[i] for i in range(len(cols))} for item in res]
-    return res_dicts
+    if isinstance(return_type, dict):
+        res = [{cols[i]: item[i] for i in range(len(cols))} for item in res]
+    elif isinstance(return_type, list):
+        res = [cols] + res
+    return res
