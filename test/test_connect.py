@@ -75,3 +75,52 @@ class Test_run:
             {"fruit": "banana", "colour": "yellow"},
             {"fruit": "orange", "colour": "orange"}
         ]
+
+    @patch("src.utils.connect.connect")
+    def test_has_optional_return_type_arg(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana"]]
+        m_db.columns = [{"name": "fruit"}]
+        m_con.return_value.__enter__.return_value = m_db
+        run("", return_type={})
+        # asserts that TypeError not raised when extra arg given
+
+    @patch("src.utils.connect.connect")
+    def test_does_usual_when_return_type_set_to_empty_dict(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana"]]
+        m_db.columns = [{"name": "fruit"}]
+        m_con.return_value.__enter__.return_value = m_db
+        assert run("", {}) == [{"fruit": "banana"}]
+
+    @patch("src.utils.connect.connect")
+    def test_cols_then_rows_in_list_return_type_set_to_empty_list(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana"]]
+        m_db.columns = [{"name": "fruit"}]
+        m_con.return_value.__enter__.return_value = m_db
+        assert run("", []) == [["fruit"], ["banana"]]
+
+    @patch("src.utils.connect.connect")
+    def test_list_return_extra_sublists_when_multi_rows(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana"], ["lemon"]]
+        m_db.columns = [{"name": "fruit"}]
+        m_con.return_value.__enter__.return_value = m_db
+        assert run("", []) == [["fruit"], ["banana"], ["lemon"]]
+
+    @patch("src.utils.connect.connect")
+    def test_list_return_extends_sublists_when_multi_column(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana", "yellow"]]
+        m_db.columns = [{"name": "fruit"}, {"name": "colour"}]
+        m_con.return_value.__enter__.return_value = m_db
+        assert run("", []) == [["fruit", "colour"], ["banana", "yellow"]]
+
+    @patch("src.utils.connect.connect")
+    def test_unallowed_vals_for_return_type_set_to_empty_dict(self, m_con):
+        m_db = Mock()
+        m_db.run.return_value = [["banana"]]
+        m_db.columns = [{"name": "fruit"}]
+        m_con.return_value.__enter__.return_value = m_db
+        assert run("", "banana") == [{"fruit": "banana"}]
