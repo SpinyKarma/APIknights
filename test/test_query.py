@@ -142,6 +142,13 @@ class Test_Query:
         u = q.update({"apple": "orange"})
         assert u.changes == validate_dict({"apple": "orange"})
 
+    def test_insert_d_method_takes_dict_and_returns_InsertQuery(self):
+        q = Query("banana")
+        i = q.insert_d({"apple": "orange"})
+        assert isinstance(i, InsertQuery)
+        assert i.cols == ["apple"]
+        assert i.rows == [["'orange'"]]
+
 
 class Test_SelectQuery:
     def test_SelectQuery_extends_Query(self):
@@ -515,6 +522,20 @@ class Test_InsertQuery:
         i.clear("insert")
         assert i.cols == []
         assert i.rows == []
+
+    @patch("src.utils.query.InsertQuery.insert")
+    def test_insert_d_method_takes_dict_splits_and_calls_insert(self, m_ins):
+        i = InsertQuery("banana")
+        i.insert_d({"apple": "orange"})
+        m_ins.assert_called_with(["apple"], [["orange"]])
+
+    @patch("src.utils.query.InsertQuery.insert")
+    def test_insert_d_retains_order(self, m_ins):
+        i = InsertQuery("banana")
+        i.insert_d({"apple": "orange", "lime": "coconut", "pear": "peach"})
+        m_ins.assert_called_with(
+            ["apple", "lime", "pear"], [["orange", "coconut", "peach"]]
+        )
 
 
 class Test_UpdateQuery:

@@ -61,6 +61,11 @@ class Query:
     def insert(self, cols: str | list = [], rows: list = []):
         return InsertQuery(self.table, cols, rows)
 
+    def insert_d(self, data: dict):
+        i = InsertQuery(self.table)
+        i.insert_d(data)
+        return i
+
     def update(self, changes: dict = None):
         return UpdateQuery(self.table, changes)
 
@@ -134,6 +139,11 @@ class InsertQuery(Query):
         self.cols = validate_cols(cols)
         self.rows = validate_rows(len(self.cols), rows)
         return self
+
+    def insert_d(self, data: dict):
+        cols = list(data.keys())
+        row = [list(data.values())]
+        return self.insert(cols, row)
 
     def returning(self, returns: str | list = "*"):
         self.returns = validate_cols(returns)
