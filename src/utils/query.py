@@ -52,6 +52,9 @@ class Query:
         msg += '"insert" or "update" methods.'
         raise IncompleteQueryErr(msg)
 
+    def __eq__(self, other):
+        return str(self) == other
+
     def select(self, cols: str | list = "*"):
         return SelectQuery(self.table, cols)
 
