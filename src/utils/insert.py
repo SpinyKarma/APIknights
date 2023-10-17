@@ -29,27 +29,20 @@ def merge(old, new):
     '''
     merged = {}
     for key in set(list(new.keys())+list(old.keys())):
-        log(key)
         if old.get(key) == None:
-            log("overwriting Null value")
             merged[key] = new[key]
         if new.get(key) == None:
-            log("keeping old value")
             merged[key] = old[key]
         elif isinstance(new.get(key), dict) and isinstance(old.get(key), dict):
-            log(key+" is a dict")
             merged[key] = merge(old[key], new[key])
         elif old.get(key) != new.get(key):
-            log("updating with new data")
             merged[key] = new[key]
         else:
-            log("no change, keeing old")
             merged[key] = old[key]
     return merged
 
 
 def diff(before, after):
-    log(before, after)
     changes = {
         key: after[key] for key in after if after[key] != before.get(key)
     }
@@ -65,17 +58,12 @@ def insert_archetype(stored_arch_info, fresh_arch_info: dict):
     else:
         stored_arch_info = stored_arch_info[0]
         a_id = stored_arch_info["archetype_id"]
-        log("calling merge")
         merged = merge(stored_arch_info, fresh_arch_info)
-        log("merged = ", merged)
         changes = diff(stored_arch_info, merged)
-        log("changes = ", changes)
         if changes != {}:
             q = Query("archetypes").update(changes)
             q.where({"archetype_id": a_id})
-            log("query = ", q)
             run(q())
-            log("query has been run")
     return a_id
 
 
@@ -170,50 +158,35 @@ def insert(operator_info, archetype_info, skill_info, module_info, tag_info):
     a_q = Query("archetypes").select()
     a_q.where({"archetype_name": archetype_info["archetype_name"]})
     stored_a = run(a_q())
-    log("stored archetype data:", stored_a)
     a_id = insert_archetype(stored_a, archetype_info)
-    log("archetype id:", a_id)
 
     s_ids = []
     for skill in skill_info:
-        log.x("new skill data:", skill)
         s_q = Query("skills").select()
         s_q.where({"skill_name": skill["skill_name"]})
         stored_s = run(s_q())
-        log("stored skill data:", stored_s)
         s_ids.append(insert_skill(stored_s, skill))
-    log("skill ids:", s_ids)
 
     m_ids = []
     for module in module_info:
-        log.x("new module data:", module)
         m_q = Query("modules").select()
         m_q.where({"module_name": module["module_name"]})
         stored_m = run(m_q())
-        log("stored module data:", stored_m)
         m_ids.append(insert_module(stored_m, module))
-    log("module ids:", m_ids)
 
     o_q = Query("operators").select()
     o_q.where({"operator_name": operator_info["operator_name"]})
     stored_o = run(o_q())
-    log("stored operator data:", stored_o)
     modded_op_info = add_ids_to_op(operator_info, a_id, s_ids, m_ids)
-    log("modded op info:", modded_op_info)
     o_id = insert_operator(stored_o, modded_op_info)
-    log("operator id:", o_id)
-    log("alter:", operator_info["alter"])
     alter_mod(operator_info["alter"], o_id)
 
     t_q = Query("tags").select()
     stored_t = {tag["tag_name"]: tag["tag_id"] for tag in run(t_q())}
-    log("stored tag data:", stored_t)
     t_ids = insert_tags(stored_t, tag_info)
-    log("tag ids:", t_ids)
     o_t_q = Query("operators_tags").select("tag_id")
     o_t_q.where({"operator_id": o_id})
     stored_o_t = [tag["tag_id"] for tag in run(o_t_q())]
-    log("stored operator tag info:", stored_o_t)
     insert_operators_tags(stored_o_t, o_id, t_ids)
 
 
@@ -221,5 +194,5 @@ def insert(operator_info, archetype_info, skill_info, module_info, tag_info):
     # from src.utils.scraper import scrape
     # insert(*scrape("cutter"))
     # query = select_query("operators", "operator_id, operator_name, alter")
-    # log(run(query))
+    # log.x(run(query))
     # pass
